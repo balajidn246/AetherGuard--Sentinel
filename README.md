@@ -32,22 +32,6 @@
 npm install
 pip install -r requirements.txt
 
-# Dashboard Preview
-
-## Dashboard
-![Dashboard](screenshots/Dashboard.png)
-
-## Attack Map
-![Attack Map](screenshots/Attack Map.png)
-
-## Incident Management
-![Incident Management](screenshots/Incident Management.png)
-
-## Log Explorer
-![Log Explorer](screenshots/Log Explorer.png)
-
-## Report
-![Report](screenshots/Report.png)
 
 ## UEBA Analytics
 ![UEBA](screenshots/UEBA.png)
