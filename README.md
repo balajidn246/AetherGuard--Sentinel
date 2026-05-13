@@ -25,3 +25,20 @@
 ```bash
 npm install
 pip install -r requirements.txt
+
+# Dashboard Preview
+
+## Main Dashboard
+![Dashboard](screenshots/dashboard.png)
+
+## Live Logs
+![Logs](screenshots/logs.png)
+
+## Threat Alerts
+![Alerts](screenshots/alerts.png)
+
+## Attack Map
+![Attack Map](screenshots/attack-map.png)
+
+## Incident Management
+![Incidents](screenshots/incidents.png)
