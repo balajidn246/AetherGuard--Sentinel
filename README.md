@@ -99,9 +99,168 @@
 
 ### Installation
 ```bash
-npm install
+# Installation Guide
+
+## Prerequisites
+
+Make sure the following are installed:
+
+- Python 3.10+
+- Node.js 18+
+- npm
+- Git
+
+Optional:
+- MongoDB (TinyDB fallback supported)
+
+---
+
+# Clone Repository
+
+```bash
+git clone https://github.com/balajidn246/AetherGuard--Sentinel.git
+cd AetherGuard--Sentinel
+```
+
+---
+
+# Backend Setup
+
+```bash
+cd backend
+```
+
+## Create Virtual Environment
+
+### Windows
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+### Linux/macOS
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+---
+
+## Install Python Dependencies
+
+```bash
 pip install -r requirements.txt
+```
 
+---
 
+## Start Backend Server
+
+```bash
+python main.py
+```
+
+Backend runs on:
+
+```text
+http://localhost:8000
+```
+
+---
+
+# Frontend Setup
+
+Open a NEW terminal:
+
+```bash
+cd frontend
+```
+
+---
+
+## Install Frontend Dependencies
+
+```bash
+npm install
+```
+
+---
+
+## Start Frontend
+
+```bash
+npm run dev
+```
+
+Frontend runs on:
+
+```text
+http://localhost:5173
+```
+
+---
+
+# Default Login Credentials
+
+## Admin
+```text
+Username: admin
+Password: admin123
+```
+
+## Analyst
+```text
+Username: analyst
+Password: analyst123
+```
+
+---
+
+# Features Included
+
+- Real-time WebSocket log streaming
+- Threat detection engine
+- UEBA anomaly analytics
+- Incident response workflow
+- Splunk-style log explorer
+- Attack simulation engine
+- JWT authentication
+- SOC dashboard analytics
+
+---
+
+# Troubleshooting
+
+## Port Already In Use
+
+Kill running processes:
+
+### Windows
+```powershell
+taskkill /F /IM python.exe
+taskkill /F /IM node.exe
+```
+
+---
+
+## Reinstall Frontend Packages
+
+```bash
+npm install
+```
+
+---
+
+## Reinstall Backend Packages
+
+```bash
+pip install -r requirements.txt --force-reinstall
+```
+
+---
+
+# Production Notes
+
+This project is designed as an enterprise-style SOC/SIEM simulation platform for cybersecurity learning, research, and portfolio demonstration.
 
 
