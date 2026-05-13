@@ -1,0 +1,30 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.11"
+  },
+  "dependencies": {
+    "axios": "^1.16.0",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.14.0",
+    "react-router-dom": "^7.15.0",
+    "react-simple-maps": "^3.0.0",
+    "react-toastify": "^11.1.0",
+    "recharts": "^3.8.1",
+    "zustand": "^5.0.13"
+  }
+}
