@@ -1,6 +1,9 @@
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react)
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-06B6D4?style=for-the-badge&logo=tailwindcss)
+![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb)
+![WebSockets](https://img.shields.io/badge/WebSockets-000000?style=for-the-badge)
 
 
 
