@@ -24,11 +24,81 @@
 - WebSockets
 - Scikit-learn
 
+# System Architecture
+
+                    ┌───────────────────────────┐
+                    │      SOC Analysts         │
+                    │  Security Administrators  │
+                    └────────────┬──────────────┘
+                                 │
+                                 ▼
+              ┌─────────────────────────────────┐
+              │         React Frontend          │
+              │---------------------------------│
+              │ • Live Dashboard                │
+              │ • Log Explorer                  │
+              │ • Incident Management           │
+              │ • UEBA Analytics                │
+              │ • Reports & Visualizations      │
+              └────────────┬────────────────────┘
+                           │ REST API / WebSocket
+                           ▼
+              ┌─────────────────────────────────┐
+              │         FastAPI Backend         │
+              │---------------------------------│
+              │ • JWT Authentication            │
+              │ • API Endpoints                 │
+              │ • WebSocket Server              │
+              │ • RBAC Authorization            │
+              │ • Incident Processing           │
+              └────────────┬────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+
+┌────────────────┐ ┌────────────────┐ ┌─────────────────┐
+│ Detection      │ │ UEBA / ML      │ │ Threat Intel    │
+│ Engine          │ │ Analytics       │ │ Module          │
+│----------------│ │----------------│ │----------------│
+│ • Brute Force  │ │ • Isolation    │ │ • IOC Tracking │
+│ • Port Scan    │ │   Forest       │ │ • IP Reputation│
+│ • Malware      │ │ • Risk Scoring │ │ • Threat Feeds │
+│ • PowerShell   │ │ • Anomalies    │ │ • Blacklists   │
+└────────┬───────┘ └────────┬───────┘ └────────┬────────┘
+         │                  │                  │
+         └──────────────────┼──────────────────┘
+                            ▼
+
+              ┌─────────────────────────────────┐
+              │         Data Layer              │
+              │---------------------------------│
+              │ • MongoDB / TinyDB              │
+              │ • Security Logs                 │
+              │ • Alerts & Incidents            │
+              │ • User Data                     │
+              │ • Threat Intelligence Data      │
+              └─────────────────────────────────┘
+
+                            ▲
+                            │
+              ┌─────────────────────────────────┐
+              │       Attack Simulator          │
+              │---------------------------------│
+              │ • SSH Brute Force              │
+              │ • DDoS Simulation              │
+              │ • Malware Activity             │
+              │ • Port Scanning                │
+              │ • Unauthorized Access          │
+              └─────────────────────────────────┘
+
+
 
 
 ### Installation
 ```bash
 npm install
 pip install -r requirements.txt
+
+
 
 
