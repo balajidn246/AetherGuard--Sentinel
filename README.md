@@ -24,8 +24,7 @@
 - WebSockets
 - Scikit-learn
 
-### Screenshots
-(Add images here)
+
 
 ### Installation
 ```bash
