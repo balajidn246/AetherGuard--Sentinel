@@ -28,17 +28,21 @@ pip install -r requirements.txt
 
 # Dashboard Preview
 
-## Main Dashboard
-![Dashboard](screenshots/dashboard.png)
-
-## Live Logs
-![Logs](screenshots/logs.png)
-
-## Threat Alerts
-![Alerts](screenshots/alerts.png)
+## Dashboard
+![Dashboard](screenshots/Dashboard.png)
 
 ## Attack Map
-![Attack Map](screenshots/attack-map.png)
+![Attack Map](screenshots/Attack Map.png)
 
 ## Incident Management
-![Incidents](screenshots/incidents.png)
+![Incident Management](screenshots/Incident Management.png)
+
+## Log Explorer
+![Log Explorer](screenshots/Log Explorer.png)
+
+## Report
+![Report](screenshots/Report.png)
+
+## UEBA Analytics
+![UEBA](screenshots/UEBA.png)
+
