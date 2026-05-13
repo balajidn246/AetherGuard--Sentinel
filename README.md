@@ -33,6 +33,3 @@ npm install
 pip install -r requirements.txt
 
 
-## UEBA Analytics
-![UEBA](screenshots/UEBA.png)
-
