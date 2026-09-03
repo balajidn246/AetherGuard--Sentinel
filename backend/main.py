@@ -14,13 +14,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # ── Path fix so imports work when run from backend/ directory ────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from backend.core.logging import setup_logging, get_logger
+from backend.core.middleware import RequestContextMiddleware
+from backend.core.exceptions import AetherGuardError, aetherguard_exception_handler
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger("aetherguard")
+setup_logging()
+logger = get_logger("aetherguard")
 
 
 @asynccontextmanager
@@ -78,8 +77,14 @@ async def lifespan(app: FastAPI):
     app.state.risk_scorer = risk_scorer
 
     # 7. Background tasks
-    asyncio.create_task(log_generator.start_streaming())
-    asyncio.create_task(attack_simulator.run_attack_campaigns())
+    # (Simulators disabled per user request - strict real-time database/API traffic only)
+    # asyncio.create_task(log_generator.start_streaming())
+    # asyncio.create_task(attack_simulator.run_attack_campaigns())
+    
+    from backend.services.syslog_receiver import SyslogReceiver
+    syslog_receiver = SyslogReceiver(app_state=app.state, port=5514)
+    app.state.syslog_receiver = syslog_receiver
+    asyncio.create_task(syslog_receiver.start())
 
     logger.info("━" * 60)
     logger.info("  ✅  AetherGuard Sentinel is ONLINE")
@@ -94,6 +99,8 @@ async def lifespan(app: FastAPI):
 
     logger.info("🛑 AetherGuard Sentinel shutting down...")
     log_generator.stop()
+    if hasattr(app.state, "syslog_receiver"):
+        await app.state.syslog_receiver.stop()
 
 
 # ── FastAPI App ──────────────────────────────────────────────────────────────
@@ -103,6 +110,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.add_exception_handler(AetherGuardError, aetherguard_exception_handler)
+app.add_middleware(RequestContextMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -118,7 +128,7 @@ app.add_middleware(
 )
 
 # ── Routers ──────────────────────────────────────────────────────────────────
-from api.routes import auth, dashboard, logs, alerts, incidents, threat_intel, users, reports
+from api.routes import auth, dashboard, logs, alerts, incidents, threat_intel, users, reports, ingest, signals
 
 app.include_router(auth.router,         prefix="/api/auth",         tags=["Auth"])
 app.include_router(dashboard.router,    prefix="/api/dashboard",    tags=["Dashboard"])
@@ -128,6 +138,8 @@ app.include_router(incidents.router,    prefix="/api/incidents",    tags=["Incid
 app.include_router(threat_intel.router, prefix="/api/threat-intel", tags=["Threat Intel"])
 app.include_router(users.router,        prefix="/api/users",        tags=["Users"])
 app.include_router(reports.router,      prefix="/api/reports",      tags=["Reports"])
+app.include_router(ingest.router,       prefix="/api/ingest",       tags=["Ingestion"])
+app.include_router(signals.router,      prefix="/api/signals",      tags=["Signals & AI"])
 
 
 # ── Core Endpoints ───────────────────────────────────────────────────────────
@@ -145,9 +157,20 @@ async def root():
 @app.get("/api/health", tags=["Health"])
 async def health():
     from db.database import USE_MONGO
+    from backend.db.clickhouse import ClickHouseClient
+
+    ch_status = "offline"
+    try:
+        if ClickHouseClient.get_client():
+            ch_status = "online"
+    except Exception:
+        pass
+
     return {
         "status": "healthy",
-        "database": "mongodb" if USE_MONGO else "tinydb",
+        "legacy_database": "mongodb" if USE_MONGO else "tinydb",
+        "postgres": "configured",
+        "clickhouse": ch_status,
         "websocket_clients": getattr(app.state, "ws_manager", None) and app.state.ws_manager.client_count,
     }
 

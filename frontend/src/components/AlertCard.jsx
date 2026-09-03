@@ -1,6 +1,6 @@
 import { severityBadgeClass, formatDateTime } from '../utils/constants'
-import { Bell, Check, ArrowUpRight } from 'lucide-react'
-import { alertsApi } from '../services/api'
+import { Bell, Check, ArrowUpRight, BrainCircuit } from 'lucide-react'
+import { alertsApi, signalsApi } from '../services/api'
 import { toast } from 'react-toastify'
 import { useState } from 'react'
 
@@ -14,6 +14,7 @@ const SEV_BORDER = {
 
 export default function AlertCard({ alert, onUpdate }) {
   const [loading, setLoading] = useState(false)
+  const [investigating, setInvestigating] = useState(false)
 
   const ack = async () => {
     setLoading(true)
@@ -25,6 +26,18 @@ export default function AlertCard({ alert, onUpdate }) {
       toast.error('Failed to acknowledge')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const investigate = async () => {
+    setInvestigating(true)
+    try {
+      await signalsApi.investigate(alert._id)
+      toast.info('AI Investigation Started (Local Ollama)')
+    } catch (err) {
+      toast.error('AI Investigation Failed')
+    } finally {
+      setInvestigating(false)
     }
   }
 
@@ -73,6 +86,16 @@ export default function AlertCard({ alert, onUpdate }) {
         </div>
 
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <button
+            onClick={investigate}
+            disabled={investigating}
+            className="btn-cyber flex items-center gap-1 hover:bg-purple-900/30"
+            style={{ padding: '3px 10px', fontSize: '0.7rem', border: '1px solid #8b5cf6', color: '#8b5cf6' }}
+            title="Analyze with local AI"
+          >
+            <BrainCircuit size={10} /> {investigating ? 'Analyzing...' : 'Investigate'}
+          </button>
+          
           {alert.acknowledged ? (
             <span className="badge badge-low flex items-center gap-1">
               <Check size={9} /> ACK

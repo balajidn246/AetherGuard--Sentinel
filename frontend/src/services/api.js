@@ -99,6 +99,12 @@ export const uebaApi = {
   user: (username) => api.get(`/api/ueba/user/${username}`),
 }
 
+// ── Signals & AI ─────────────────────────────────────────────────────────────
+export const signalsApi = {
+  investigate: (id) => api.post(`/api/signals/${id}/investigate`),
+  health: () => api.get('/api/signals/ai-health'),
+}
+
 // ── Health ────────────────────────────────────────────────────────────────────
 export const healthApi = {
   check: () => api.get('/api/health'),

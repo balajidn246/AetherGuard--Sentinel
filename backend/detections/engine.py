@@ -7,6 +7,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
+import os
+from backend.detections.yaml_engine import YamlDetectionEngine
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,7 +19,12 @@ class DetectionEngine:
         self._rules = self._load_rules()
         # Rolling window buffers for stateful rules {key: [timestamps]}
         self._event_windows: dict = {}
-        logger.info(f"🔍 Detection Engine loaded {len(self._rules)} rules")
+        
+        # Load YAML Rules
+        rules_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rules', 'custom')
+        self.yaml_engine = YamlDetectionEngine(rules_path)
+        
+        logger.info(f"🔍 Detection Engine loaded {len(self._rules)} python rules and {len(self.yaml_engine.rules)} yaml rules")
 
     def _load_rules(self) -> list:
         from detections.rules.brute_force import BruteForceRule
@@ -40,6 +48,7 @@ class DetectionEngine:
 
     async def evaluate(self, log: dict):
         """Run all rules against a single log event."""
+        # 1. Hardcoded Python Rules
         for rule in self._rules:
             try:
                 match = await rule.evaluate(log, self._event_windows)
@@ -47,6 +56,22 @@ class DetectionEngine:
                     await self._create_alert(log, match)
             except Exception as exc:
                 logger.error(f"Rule {rule.name} error: {exc}")
+
+        # 2. Dynamic YAML Rules
+        try:
+            yaml_matches = self.yaml_engine.evaluate_event(log)
+            for ym in yaml_matches:
+                match = {
+                    "title": ym["rule_name"],
+                    "description": f"Triggered YAML rule: {ym['rule_id']}",
+                    "severity": ym["severity"],
+                    "rule_name": ym["rule_name"],
+                    "mitre_techniques": ym["mitre"],
+                    "tags": ["yaml-engine"]
+                }
+                await self._create_alert(log, match)
+        except Exception as exc:
+            logger.error(f"YAML Engine evaluation error: {exc}")
 
     async def _create_alert(self, log: dict, match: dict):
         from db.database import db_insert

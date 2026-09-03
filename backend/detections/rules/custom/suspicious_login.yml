@@ -1,0 +1,14 @@
+id: "rule-custom-001"
+name: "Suspicious API Login"
+description: "Detects login failures containing suspicious keywords"
+severity: "high"
+mitre:
+  - "T1110"
+  - "T1078"
+conditions:
+  - field: "event_type"
+    operator: "equals"
+    value: "login"
+  - field: "message"
+    operator: "contains"
+    value: "failed"
