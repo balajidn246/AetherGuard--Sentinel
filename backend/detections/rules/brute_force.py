@@ -1,4 +1,4 @@
-"""Brute force login detection — SSH and Windows logon failures."""
+"""Brute force login detection - SSH and Windows logon failures."""
 import time
 from detections.rules.base import BaseRule
 

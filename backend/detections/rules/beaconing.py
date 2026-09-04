@@ -1,4 +1,4 @@
-"""Beaconing detection — periodic outbound connections to same external IP."""
+"""Beaconing detection - periodic outbound connections to same external IP."""
 import time
 from detections.rules.base import BaseRule
 
@@ -34,10 +34,10 @@ class BeaconingRule(BaseRule):
         if count >= BEACON_COUNT:
             windows[key] = []
             return {
-                "title": f"C2 Beaconing Detected: {src_host} → {dest_ip}",
+                "title": f"C2 Beaconing Detected: {src_host} ? {dest_ip}",
                 "description": (
                     f"{src_host} made {count} periodic connections to {dest_ip} "
-                    f"within {BEACON_WINDOW}s — possible C2 beacon"
+                    f"within {BEACON_WINDOW}s - possible C2 beacon"
                 ),
                 "severity": "high",
                 "rule_name": self.name,

@@ -1,5 +1,5 @@
 """
-Realistic Log Generator — produces authentic Windows, Linux, Firewall,
+Realistic Log Generator - produces authentic Windows, Linux, Firewall,
 IDS/IPS, Auth, and Web server log events streamed via WebSocket.
 """
 import asyncio
@@ -201,7 +201,7 @@ def build_firewall_log() -> dict:
         "protocol": proto,
         "dest_port": dst_port,
         "action": action,
-        "message": f"[Firewall] {action} {proto} {src_ip}→{dst_ip}:{dst_port}",
+        "message": f"[Firewall] {action} {proto} {src_ip}?{dst_ip}:{dst_port}",
         "raw_log": raw,
         "mitre_techniques": ["T1071"] if action == "ALLOW" else [],
         "country": country,
@@ -241,7 +241,7 @@ def build_ids_alert() -> dict:
         "source_ip": src_ip,
         "dest_ip": dst_ip,
         "signature": sig,
-        "message": f"[IDS/IPS] {sig} | {src_ip} → {dst_ip}",
+        "message": f"[IDS/IPS] {sig} | {src_ip} ? {dst_ip}",
         "raw_log": f"[**] {sig} [**] {src_ip}:{random.randint(1024,65535)} -> {dst_ip}:{random.randint(1,1024)}",
         "mitre_techniques": mitre,
         "country": country,
@@ -283,7 +283,7 @@ def build_web_server_log() -> dict:
         "http_method": method,
         "url_path": path,
         "status_code": code,
-        "message": f"[Web] {method} {path} → HTTP {code} from {src_ip}",
+        "message": f"[Web] {method} {path} ? HTTP {code} from {src_ip}",
         "raw_log": raw,
         "mitre_techniques": ["T1190"] if code in (200, 201) and path.startswith("/admin") else [],
         "country": country,
@@ -323,9 +323,8 @@ class LogGenerator:
         self._running = False
 
     async def start_streaming(self):
-        from db.database import db_insert
         self._running = True
-        logger.info("📡 Log streaming started")
+        logger.info("[SIGNAL] Log streaming started")
 
         builders, weights = zip(*LOG_BUILDERS)
 
@@ -334,10 +333,8 @@ class LogGenerator:
                 builder = random.choices(builders, weights=weights, k=1)[0]
                 log = builder()
 
-                # Persist to DB
-                await db_insert("logs", log)
 
-                # UEBA — record user behaviour event
+                # UEBA - record user behaviour event
                 if self._ueba and log.get("username"):
                     self._ueba.record_event(log)
 

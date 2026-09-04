@@ -9,7 +9,7 @@ def init_db():
         logger.warning("ClickHouse client not available. Skipping initialization.")
         return
 
-    # OCSF-aligned normalized event schema
+    # OCSF-aligned normalized event schema with secondary skipping indexes
     create_events_table = """
     CREATE TABLE IF NOT EXISTS events (
         tenant_id String,
@@ -30,8 +30,8 @@ def init_db():
         raw_data String,
         
         -- Observables / Entities
-        src_ip IPv4,
-        dst_ip IPv4,
+        src_ip String,
+        dst_ip String,
         src_port UInt16,
         dst_port UInt16,
         user_name LowCardinality(String),
@@ -40,7 +40,12 @@ def init_db():
         file_hash String,
         
         -- Metadata
-        source_log LowCardinality(String)
+        source_log LowCardinality(String),
+
+        -- Secondary Skipping Indexes for Fast Threat Hunting
+        INDEX idx_src_ip src_ip TYPE bloom_filter(0.01) GRANULARITY 1,
+        INDEX idx_user_name user_name TYPE set(100) GRANULARITY 1,
+        INDEX idx_host_name host_name TYPE set(100) GRANULARITY 1
     ) ENGINE = MergeTree()
     PARTITION BY toYYYYMM(time)
     ORDER BY (tenant_id, time, category_name)
@@ -49,6 +54,20 @@ def init_db():
     try:
         client.command(create_events_table)
         logger.info("ClickHouse events table initialized.")
+        
+        # In case the table already existed without indices, apply migration safely:
+        indexes = [
+            ("idx_src_ip", "ADD INDEX IF NOT EXISTS idx_src_ip src_ip TYPE bloom_filter(0.01) GRANULARITY 1"),
+            ("idx_user_name", "ADD INDEX IF NOT EXISTS idx_user_name user_name TYPE set(100) GRANULARITY 1"),
+            ("idx_host_name", "ADD INDEX IF NOT EXISTS idx_host_name host_name TYPE set(100) GRANULARITY 1"),
+        ]
+        for name, sql in indexes:
+            try:
+                client.command(f"ALTER TABLE events {sql}")
+            except Exception as iexc:
+                # Some ClickHouse versions handle duplicate indexes or non-empty tables differently
+                logger.debug(f"Index migration notice for {name}: {iexc}")
+                
     except Exception as e:
         logger.error("Error creating ClickHouse tables", error=str(e))
 

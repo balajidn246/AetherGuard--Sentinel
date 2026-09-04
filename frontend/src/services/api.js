@@ -83,6 +83,32 @@ export const threatIntelApi = {
   checkHash: (hash) => api.get(`/api/threat-intel/hash/${hash}`),
   feeds: () => api.get('/api/threat-intel/feeds'),
   blocklist: () => api.get('/api/threat-intel/blocklist'),
+  syncFeeds: () => api.post('/api/threat-intel/sync'),
+}
+
+// ── Cases ────────────────────────────────────────────────────────────────────
+export const casesApi = {
+  list: (params) => api.get('/api/cases/', { params }),
+  get: (id) => api.get(`/api/cases/${id}`),
+  create: (data) => api.post('/api/cases/', data),
+  update: (id, data) => api.patch(`/api/cases/${id}`, data),
+  addNote: (id, content) => api.post(`/api/cases/${id}/notes`, { content }),
+  attachSignal: (id, signalId) => api.post(`/api/cases/${id}/signals`, null, { params: { signal_id: signalId } }),
+}
+
+// ── Detection Rules ──────────────────────────────────────────────────────────
+export const rulesApi = {
+  list: (params) => api.get('/api/rules/', { params }),
+  get: (id) => api.get(`/api/rules/${id}`),
+  create: (data) => api.post('/api/rules/', data),
+  toggle: (id, enabled) => api.patch(`/api/rules/${id}/enable`, { enabled }),
+  test: (id, event) => api.post(`/api/rules/${id}/test`, { event }),
+}
+
+// ── Audit Logs ───────────────────────────────────────────────────────────────
+export const auditApi = {
+  list: (params) => api.get('/api/audit/', { params }),
+  actions: () => api.get('/api/audit/actions'),
 }
 
 // ── Reports ──────────────────────────────────────────────────────────────────
@@ -111,3 +137,4 @@ export const healthApi = {
 }
 
 export default api
+

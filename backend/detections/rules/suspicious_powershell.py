@@ -1,4 +1,4 @@
-"""Suspicious PowerShell detection — encoded commands, download cradles."""
+"""Suspicious PowerShell detection - encoded commands, download cradles."""
 from detections.rules.base import BaseRule
 
 SUSPICIOUS_PATTERNS = [

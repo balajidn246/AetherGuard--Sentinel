@@ -1,4 +1,4 @@
-"""Impossible travel detection — same user logging in from two distant locations."""
+"""Impossible travel detection - same user logging in from two distant locations."""
 import time
 from detections.rules.base import BaseRule
 

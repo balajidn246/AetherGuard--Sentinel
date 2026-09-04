@@ -1,4 +1,4 @@
-"""Privilege escalation detection — EventID 4728, 4672, 4720."""
+"""Privilege escalation detection - EventID 4728, 4672, 4720."""
 from detections.rules.base import BaseRule
 
 PRIV_EVENT_IDS = {4728, 4672, 4720, 4732, 4756}

@@ -1,15 +1,19 @@
 """
-Authentication routes — login, token refresh, logout, me.
+Authentication routes - login, token refresh, logout, me.
+All operations backed by real PostgreSQL (no SQLite).
 """
 from datetime import timedelta
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from pydantic import BaseModel
+from sqlalchemy import select, insert
+from typing import Optional
 
-from services.auth_service import authenticate_user, create_access_token
-from api.middleware.auth import get_current_user
-from config.settings import settings
-from db.sqlite_db import write_audit_log, get_all_users, create_user
-from services.auth_service import hash_password
+from backend.services.auth_service import authenticate_user, create_access_token, get_user_by_username
+from backend.core.security import hash_password
+from backend.api.middleware.auth import get_current_user
+from backend.core.config import settings
+from backend.db.postgres import AsyncSessionLocal
+from backend.models.user import User
 
 router = APIRouter()
 
@@ -41,21 +45,13 @@ async def login(request: Request, body: LoginRequest):
         "sub": user["id"],
         "username": user["username"],
         "role": user["role"],
+        "tenant_id": user.get("tenant_id", "default"),
         "full_name": user.get("full_name", ""),
         "department": user.get("department", "SOC"),
     }
     access_token = create_access_token(
         token_data,
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
-
-    await write_audit_log(
-        user_id=user["id"],
-        username=user["username"],
-        action="LOGIN",
-        resource="/api/auth/login",
-        details=f"Successful login",
-        ip=request.client.host if request.client else "",
     )
 
     return {
@@ -79,13 +75,6 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 
 @router.post("/logout")
 async def logout(current_user: dict = Depends(get_current_user)):
-    await write_audit_log(
-        user_id=current_user.get("sub", ""),
-        username=current_user.get("username", ""),
-        action="LOGOUT",
-        resource="/api/auth/logout",
-        details="User logged out",
-    )
     return {"message": "Logged out successfully"}
 
 
@@ -93,19 +82,43 @@ async def logout(current_user: dict = Depends(get_current_user)):
 async def list_users(current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
-    return await get_all_users()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User))
+        users = result.scalars().all()
+        return [
+            {
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "role": u.role,
+                "full_name": u.full_name,
+                "department": u.department,
+                "is_active": u.is_active,
+            }
+            for u in users
+        ]
 
 
 @router.post("/users")
 async def add_user(body: CreateUserRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
-    result = await create_user({
-        "username": body.username,
-        "email": body.email,
-        "hashed_password": hash_password(body.password),
-        "role": body.role,
-        "full_name": body.full_name,
-        "department": body.department,
-    })
-    return {"message": "User created", "user": result}
+
+    # Check if user already exists
+    existing = await get_user_by_username(body.username)
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    async with AsyncSessionLocal() as session:
+        new_user = User(
+            username=body.username,
+            email=body.email,
+            hashed_password=hash_password(body.password),
+            role=body.role,
+            full_name=body.full_name,
+            department=body.department,
+            is_active=True,
+        )
+        session.add(new_user)
+        await session.commit()
+        return {"message": "User created", "username": body.username, "role": body.role}

@@ -1,15 +1,16 @@
 """
-Incident management routes — full CRUD + workflow transitions.
+Incident management routes - REAL queries to PostgreSQL incidents table.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import select, func, update
 from api.middleware.auth import get_current_user, require_analyst
-from db.database import db_find, db_find_one, db_insert, db_update_one, db_count
+from backend.db.postgres import AsyncSessionLocal
+from backend.models.incident import Incident
 
 router = APIRouter()
-
 
 class IncidentCreate(BaseModel):
     title: str
@@ -21,7 +22,6 @@ class IncidentCreate(BaseModel):
     hostname: Optional[str] = None
     mitre_techniques: List[str] = []
 
-
 class IncidentUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -30,10 +30,8 @@ class IncidentUpdate(BaseModel):
     assigned_to: Optional[str] = None
     tags: Optional[List[str]] = None
 
-
 class IncidentNote(BaseModel):
     content: str
-
 
 VALID_STATUSES = ["open", "investigating", "contained", "resolved", "closed"]
 VALID_TRANSITIONS = {
@@ -44,7 +42,6 @@ VALID_TRANSITIONS = {
     "closed": [],
 }
 
-
 @router.get("/")
 async def list_incidents(
     status: Optional[str] = Query(None),
@@ -54,63 +51,117 @@ async def list_incidents(
     skip: int = Query(0),
     current_user: dict = Depends(get_current_user),
 ):
-    query = {}
-    if status:
-        query["status"] = status
-    if severity:
-        query["severity"] = severity
-    if assigned_to:
-        query["assigned_to"] = assigned_to
+    tenant_id = current_user.get("tenant_id", "default")
+    incidents_list = []
+    total = 0
 
-    incidents = await db_find("incidents", query, limit=limit, skip=skip)
-    total = await db_count("incidents", query)
-    return {"incidents": incidents, "total": total}
+    async with AsyncSessionLocal() as session:
+        query = select(Incident).where(Incident.tenant_id == tenant_id)
+        count_query = select(func.count(Incident.id)).where(Incident.tenant_id == tenant_id)
 
+        if status:
+            query = query.where(Incident.status == status.lower())
+            count_query = count_query.where(Incident.status == status.lower())
+        if severity:
+            query = query.where(Incident.severity == severity.lower())
+            count_query = count_query.where(Incident.severity == severity.lower())
+        if assigned_to:
+            query = query.where(Incident.assignee == assigned_to)
+            count_query = count_query.where(Incident.assignee == assigned_to)
+
+        query = query.order_by(Incident.created_at.desc()).offset(skip).limit(limit)
+
+        total = (await session.execute(count_query)).scalar() or 0
+        rows = (await session.execute(query)).scalars().all()
+
+        for inc in rows:
+            incidents_list.append({
+                "_id": inc.id,
+                "id": inc.id,
+                "title": inc.title,
+                "description": inc.description,
+                "severity": inc.severity,
+                "status": inc.status,
+                "assigned_to": inc.assignee,
+                "source_signal_ids": inc.source_signal_ids or [],
+                "tags": inc.tags or [],
+                "notes": inc.notes or [],
+                "created_at": inc.created_at.isoformat() if inc.created_at else "",
+                "updated_at": inc.updated_at.isoformat() if inc.updated_at else ""
+            })
+
+    return {"incidents": incidents_list, "total": total}
 
 @router.get("/stats")
 async def incident_stats(current_user: dict = Depends(get_current_user)):
-    counts = {}
-    for s in VALID_STATUSES:
-        counts[s] = await db_count("incidents", {"status": s})
-    total = await db_count("incidents")
-    return {"by_status": counts, "total": total}
+    tenant_id = current_user.get("tenant_id", "default")
+    counts = {s: 0 for s in VALID_STATUSES}
+    total = 0
 
+    async with AsyncSessionLocal() as session:
+        stmt = select(Incident.status, func.count(Incident.id)).where(
+            Incident.tenant_id == tenant_id
+        ).group_by(Incident.status)
+        for row in (await session.execute(stmt)).all():
+            st = str(row[0]).lower()
+            if st in counts:
+                counts[st] = row[1]
+
+        total_stmt = select(func.count(Incident.id)).where(Incident.tenant_id == tenant_id)
+        total = (await session.execute(total_stmt)).scalar() or 0
+
+    return {"by_status": counts, "total": total}
 
 @router.get("/{incident_id}")
 async def get_incident(incident_id: str, current_user: dict = Depends(get_current_user)):
-    incident = await db_find_one("incidents", {"_id": incident_id})
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    return incident
+    tenant_id = current_user.get("tenant_id", "default")
+    async with AsyncSessionLocal() as session:
+        stmt = select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == tenant_id
+        )
+        inc = (await session.execute(stmt)).scalar_one_or_none()
+        if not inc:
+            raise HTTPException(status_code=404, detail="Incident not found")
 
+        return {
+            "_id": inc.id,
+            "id": inc.id,
+            "title": inc.title,
+            "description": inc.description,
+            "severity": inc.severity,
+            "status": inc.status,
+            "assigned_to": inc.assignee,
+            "source_signal_ids": inc.source_signal_ids or [],
+            "tags": inc.tags or [],
+            "notes": inc.notes or [],
+            "created_at": inc.created_at.isoformat() if inc.created_at else "",
+            "updated_at": inc.updated_at.isoformat() if inc.updated_at else ""
+        }
 
 @router.post("/")
 async def create_incident(body: IncidentCreate, current_user: dict = Depends(require_analyst)):
-    incident = {
-        "title": body.title,
-        "description": body.description,
-        "severity": body.severity,
-        "status": "open",
-        "assigned_to": body.assigned_to or current_user.get("username"),
-        "created_by": current_user.get("username"),
-        "tags": body.tags,
-        "source_ip": body.source_ip or "",
-        "hostname": body.hostname or "",
-        "mitre_techniques": body.mitre_techniques,
-        "alert_ids": [],
-        "notes": [],
-        "timeline": [
-            {
-                "ts": datetime.utcnow().isoformat(),
-                "action": "incident_created",
-                "actor": current_user.get("username"),
-                "note": "Incident created manually",
-            }
-        ],
-    }
-    incident_id = await db_insert("incidents", incident)
-    return {"message": "Incident created", "incident_id": incident_id}
+    tenant_id = current_user.get("tenant_id", "default")
+    username = current_user.get("username", "analyst")
 
+    async with AsyncSessionLocal() as session:
+        inc = Incident(
+            tenant_id=tenant_id,
+            title=body.title,
+            description=body.description,
+            severity=body.severity,
+            status="open",
+            assignee=body.assigned_to or username,
+            tags=body.tags or [],
+            notes=[{
+                "author": username,
+                "content": "Incident created manually",
+                "ts": datetime.now(timezone.utc).isoformat()
+            }]
+        )
+        session.add(inc)
+        await session.commit()
+        return {"message": "Incident created", "incident_id": inc.id}
 
 @router.put("/{incident_id}")
 async def update_incident(
@@ -118,26 +169,36 @@ async def update_incident(
     body: IncidentUpdate,
     current_user: dict = Depends(require_analyst),
 ):
-    incident = await db_find_one("incidents", {"_id": incident_id})
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+    tenant_id = current_user.get("tenant_id", "default")
+    async with AsyncSessionLocal() as session:
+        stmt = select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == tenant_id
+        )
+        inc = (await session.execute(stmt)).scalar_one_or_none()
+        if not inc:
+            raise HTTPException(status_code=404, detail="Incident not found")
 
-    updates = {k: v for k, v in body.dict().items() if v is not None}
-    updates["updated_at"] = datetime.utcnow().isoformat()
-    updates["updated_by"] = current_user.get("username")
+        if body.title is not None:
+            inc.title = body.title
+        if body.description is not None:
+            inc.description = body.description
+        if body.severity is not None:
+            inc.severity = body.severity
+        if body.assigned_to is not None:
+            inc.assignee = body.assigned_to
+        if body.tags is not None:
+            inc.tags = body.tags
+        if body.status is not None:
+            if body.status not in VALID_TRANSITIONS.get(inc.status, []):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid transition: {inc.status} -> {body.status}",
+                )
+            inc.status = body.status
 
-    if "status" in updates:
-        current_status = incident.get("status", "open")
-        new_status = updates["status"]
-        if new_status not in VALID_TRANSITIONS.get(current_status, []):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid transition: {current_status} → {new_status}",
-            )
-
-    await db_update_one("incidents", {"_id": incident_id}, updates)
-    return {"message": "Incident updated"}
-
+        await session.commit()
+        return {"message": "Incident updated"}
 
 @router.post("/{incident_id}/transition")
 async def transition_status(
@@ -145,32 +206,34 @@ async def transition_status(
     new_status: str,
     current_user: dict = Depends(require_analyst),
 ):
-    incident = await db_find_one("incidents", {"_id": incident_id})
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+    tenant_id = current_user.get("tenant_id", "default")
+    username = current_user.get("username", "analyst")
 
-    current_status = incident.get("status", "open")
-    if new_status not in VALID_TRANSITIONS.get(current_status, []):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot transition from {current_status} to {new_status}",
+    async with AsyncSessionLocal() as session:
+        stmt = select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == tenant_id
         )
+        inc = (await session.execute(stmt)).scalar_one_or_none()
+        if not inc:
+            raise HTTPException(status_code=404, detail="Incident not found")
 
-    timeline = incident.get("timeline", [])
-    timeline.append({
-        "ts": datetime.utcnow().isoformat(),
-        "action": "status_change",
-        "actor": current_user.get("username"),
-        "note": f"Status changed: {current_status} → {new_status}",
-    })
+        if new_status not in VALID_TRANSITIONS.get(inc.status, []):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot transition from {inc.status} to {new_status}",
+            )
 
-    await db_update_one(
-        "incidents",
-        {"_id": incident_id},
-        {"status": new_status, "timeline": timeline, "updated_at": datetime.utcnow().isoformat()},
-    )
-    return {"message": f"Status updated to {new_status}"}
-
+        notes = list(inc.notes or [])
+        notes.append({
+            "author": username,
+            "content": f"Status changed: {inc.status} -> {new_status}",
+            "ts": datetime.now(timezone.utc).isoformat()
+        })
+        inc.notes = notes
+        inc.status = new_status
+        await session.commit()
+        return {"message": f"Status updated to {new_status}"}
 
 @router.post("/{incident_id}/notes")
 async def add_note(
@@ -178,15 +241,24 @@ async def add_note(
     body: IncidentNote,
     current_user: dict = Depends(require_analyst),
 ):
-    incident = await db_find_one("incidents", {"_id": incident_id})
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+    tenant_id = current_user.get("tenant_id", "default")
+    username = current_user.get("username", "analyst")
 
-    notes = incident.get("notes", [])
-    notes.append({
-        "content": body.content,
-        "author": current_user.get("username"),
-        "ts": datetime.utcnow().isoformat(),
-    })
-    await db_update_one("incidents", {"_id": incident_id}, {"notes": notes})
-    return {"message": "Note added"}
+    async with AsyncSessionLocal() as session:
+        stmt = select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == tenant_id
+        )
+        inc = (await session.execute(stmt)).scalar_one_or_none()
+        if not inc:
+            raise HTTPException(status_code=404, detail="Incident not found")
+
+        notes = list(inc.notes or [])
+        notes.append({
+            "content": body.content,
+            "author": username,
+            "ts": datetime.now(timezone.utc).isoformat()
+        })
+        inc.notes = notes
+        await session.commit()
+        return {"message": "Note added"}

@@ -36,12 +36,17 @@ class IngestService:
                 }
                 
                 if hasattr(app_state, "detection_engine"):
-                    # The legacy engine evaluates asynchronously
+                    # The detection engine evaluates asynchronously
                     asyncio.create_task(app_state.detection_engine.evaluate(legacy_dict))
+
+                if hasattr(app_state, "ueba_engine"):
+                    # Track user activity in UEBA baseline
+                    app_state.ueba_engine.record_event(legacy_dict, tenant_id)
                     
                 if hasattr(app_state, "ws_manager"):
                     # Use create_task since send_log is async
                     asyncio.create_task(app_state.ws_manager.send_log(legacy_dict))
+
         
         # 3. Attempt to send to ClickHouse
         client = get_clickhouse()
@@ -60,7 +65,7 @@ class IngestService:
                         e.severity,
                         e.original_time or "",
                         e.message or "",
-                        e.raw_data or json.dumps(e.model_dump(exclude={"raw_data"})),
+                        e.raw_data or e.model_dump_json(exclude={"raw_data"}),
                         str(e.src_ip) if e.src_ip else "",
                         str(e.dst_ip) if e.dst_ip else "",
                         e.src_port or 0,

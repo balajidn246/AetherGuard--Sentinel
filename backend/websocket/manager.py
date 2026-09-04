@@ -1,5 +1,5 @@
 """
-WebSocket connection manager — broadcasts logs, alerts, and system events
+WebSocket connection manager - broadcasts logs, alerts, and system events
 to all connected SOC analyst clients in real time.
 """
 import json

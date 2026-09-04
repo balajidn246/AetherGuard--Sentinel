@@ -1,9 +1,9 @@
 """
-Auth middleware — JWT dependency for FastAPI routes.
+Auth middleware - JWT dependency for FastAPI routes.
 """
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from services.auth_service import decode_token
+from backend.services.auth_service import decode_token
 
 bearer_scheme = HTTPBearer()
 

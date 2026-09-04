@@ -7,7 +7,7 @@ from alembic import context
 
 from backend.core.config import settings
 from backend.models.base import Base
-import backend.models.user  # Implicity registers user model metadata
+import backend.models  # Implicitly registers all model metadata (User, SecuritySignal, Incident, IOC)
 
 config = context.config
 if config.config_file_name is not None:

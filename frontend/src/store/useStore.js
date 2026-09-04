@@ -59,6 +59,21 @@ const useStore = create((set, get) => ({
   // EPS
   eps: 0,
   setEps: (v) => set({ eps: v }),
+
+  // Theme (dark / light)
+  theme: localStorage.getItem('ag_theme') || 'dark',
+  toggleTheme: () => {
+    const next = get().theme === 'dark' ? 'light' : 'dark'
+    localStorage.setItem('ag_theme', next)
+    document.documentElement.setAttribute('data-theme', next)
+    set({ theme: next })
+  },
+  initTheme: () => {
+    const saved = localStorage.getItem('ag_theme') || 'dark'
+    document.documentElement.setAttribute('data-theme', saved)
+    set({ theme: saved })
+  },
 }))
 
 export default useStore
+

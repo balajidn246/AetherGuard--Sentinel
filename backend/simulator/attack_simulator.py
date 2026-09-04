@@ -1,5 +1,5 @@
 """
-Attack Simulator — generates realistic attack campaigns:
+Attack Simulator - generates realistic attack campaigns:
 SSH brute force, port scan, DDoS, malware execution, data exfiltration,
 reverse shell, unauthorized admin access.
 """
@@ -39,14 +39,14 @@ class AttackSimulator:
         self._running = True
 
     async def run_attack_campaigns(self):
-        logger.info("⚔️  Attack simulator started")
+        logger.info("??  Attack simulator started")
         while self._running:
             attack = random.choice(ATTACK_PROFILES)
             try:
                 await self._dispatch(attack)
             except Exception as exc:
                 logger.error(f"Attack sim error ({attack}): {exc}")
-            # Wait 15–45 seconds between campaigns
+            # Wait 15-45 seconds between campaigns
             await asyncio.sleep(random.uniform(15, 45))
 
     async def _dispatch(self, attack_type: str):
@@ -68,9 +68,8 @@ class AttackSimulator:
 
     async def _inject_logs(self, logs: list):
         """Inject attack logs through the log generator pipeline."""
-        from db.database import db_insert
         for log in logs:
-            await db_insert("logs", log)
+
             # UEBA tracking
             if self.lg._ueba and log.get("username"):
                 self.lg._ueba.record_event(log)
@@ -107,7 +106,7 @@ class AttackSimulator:
                 "attack_campaign": "ssh_brute_force",
             })
         await self._inject_logs(logs)
-        logger.info(f"⚡ SSH brute force: {attempt_count} attempts from {attacker_ip} → {target}")
+        logger.info(f"? SSH brute force: {attempt_count} attempts from {attacker_ip} ? {target}")
 
     async def _rdp_brute_force(self):
         attacker_ip = _ext_ip()
@@ -137,7 +136,7 @@ class AttackSimulator:
                 "attack_campaign": "rdp_brute_force",
             })
         await self._inject_logs(logs)
-        logger.info(f"⚡ RDP brute force: {attempt_count} attempts from {attacker_ip} → {target}")
+        logger.info(f"? RDP brute force: {attempt_count} attempts from {attacker_ip} ? {target}")
 
     async def _port_scan(self):
         attacker_ip = _ext_ip()
@@ -157,7 +156,7 @@ class AttackSimulator:
                 "protocol": "TCP",
                 "dest_port": port,
                 "action": "DENY",
-                "message": f"[PortScan] DENY TCP {attacker_ip} → {target}:{port} (SYN)",
+                "message": f"[PortScan] DENY TCP {attacker_ip} ? {target}:{port} (SYN)",
                 "raw_log": f"action=DENY proto=TCP src={attacker_ip} dst={target} dport={port} flags=SYN",
                 "mitre_techniques": ["T1046"],
                 "country": "Netherlands",
@@ -168,7 +167,7 @@ class AttackSimulator:
                 "attack_campaign": "port_scan",
             })
         await self._inject_logs(logs)
-        logger.info(f"⚡ Port scan: {len(ports)} ports from {attacker_ip} → {target}")
+        logger.info(f"? Port scan: {len(ports)} ports from {attacker_ip} ? {target}")
 
     async def _ddos_flood(self):
         attacker_ips = [_ext_ip() for _ in range(random.randint(5, 20))]
@@ -187,7 +186,7 @@ class AttackSimulator:
                 "http_method": "GET",
                 "url_path": "/",
                 "status_code": 503,
-                "message": f"[DDoS] HTTP flood from {src_ip} → {target} (503 Service Unavailable)",
+                "message": f"[DDoS] HTTP flood from {src_ip} ? {target} (503 Service Unavailable)",
                 "raw_log": f'{src_ip} - - GET / HTTP/1.1 503 -',
                 "mitre_techniques": ["T1498.001"],
                 "country": random.choice(["Russia", "China", "Iran", "Ukraine"]),
@@ -198,7 +197,7 @@ class AttackSimulator:
                 "attack_campaign": "ddos_flood",
             })
         await self._inject_logs(logs)
-        logger.info(f"⚡ DDoS flood: {len(logs)} requests to {target}")
+        logger.info(f"? DDoS flood: {len(logs)} requests to {target}")
 
     async def _malware_execution(self):
         hostname = random.choice(["WORKSTATION-101", "ENDPOINT-HR-01", "ENDPOINT-FIN-01"])
@@ -232,7 +231,7 @@ class AttackSimulator:
             }
         ]
         await self._inject_logs(logs)
-        logger.info(f"⚡ Malware execution: {process} on {hostname}")
+        logger.info(f"? Malware execution: {process} on {hostname}")
 
     async def _data_exfiltration(self):
         hostname = random.choice(["DB-SRV-01", "FILE-SRV-01", "WORKSTATION-101"])
@@ -263,7 +262,7 @@ class AttackSimulator:
             }
         ]
         await self._inject_logs(logs)
-        logger.info(f"⚡ Data exfiltration: {bytes_out // 1_000_000}MB from {hostname}")
+        logger.info(f"? Data exfiltration: {bytes_out // 1_000_000}MB from {hostname}")
 
     async def _reverse_shell(self):
         hostname = random.choice(["WEB-SRV-01", "LINUX-APP-01"])
@@ -291,7 +290,7 @@ class AttackSimulator:
             }
         ]
         await self._inject_logs(logs)
-        logger.info(f"⚡ Reverse shell: {hostname} → {attacker_ip}")
+        logger.info(f"? Reverse shell: {hostname} ? {attacker_ip}")
 
     async def _privilege_escalation(self):
         hostname = random.choice(["WORKSTATION-101", "WORKSTATION-102", "ENDPOINT-FIN-01"])
@@ -319,7 +318,7 @@ class AttackSimulator:
             }
         ]
         await self._inject_logs(logs)
-        logger.info(f"⚡ Privilege escalation: {username} on {hostname}")
+        logger.info(f"? Privilege escalation: {username} on {hostname}")
 
     async def _impossible_travel(self):
         username = random.choice(["jsmith", "mjohnson", "chadmin"])
@@ -336,7 +335,7 @@ class AttackSimulator:
                 "username": username,
                 "source_ip": ip2,
                 "message": f"[IMPOSSIBLE TRAVEL] {username} logged in from {ip2} (China) 2 mins after login from {ip1} (USA)",
-                "raw_log": f"auth: user={username} src_ip={ip2} prev_ip={ip1} time_diff=120s country_diff=China→USA",
+                "raw_log": f"auth: user={username} src_ip={ip2} prev_ip={ip1} time_diff=120s country_diff=China?USA",
                 "mitre_techniques": ["T1078", "T1534"],
                 "country": "China",
                 "geo_lat": 39.90 + random.uniform(-2, 2),
@@ -347,7 +346,7 @@ class AttackSimulator:
             }
         ]
         await self._inject_logs(logs)
-        logger.info(f"⚡ Impossible travel: {username}")
+        logger.info(f"? Impossible travel: {username}")
 
     async def _powershell_attack(self):
         hostname = random.choice(["WORKSTATION-101", "ENDPOINT-HR-01", "DC01"])
@@ -384,4 +383,4 @@ class AttackSimulator:
             }
         ]
         await self._inject_logs(logs)
-        logger.info(f"⚡ PowerShell attack on {hostname} by {username}")
+        logger.info(f"? PowerShell attack on {hostname} by {username}")

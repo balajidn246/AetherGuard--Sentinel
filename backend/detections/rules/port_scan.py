@@ -1,4 +1,4 @@
-"""Port scan detection — rapid SYN/DENY events from single source IP."""
+"""Port scan detection - rapid SYN/DENY events from single source IP."""
 import time
 from detections.rules.base import BaseRule
 
@@ -24,7 +24,7 @@ class PortScanRule(BaseRule):
         now = time.time()
         bucket = windows.setdefault(key, set())
 
-        # Store (timestamp, port) pairs — use list for time-windowing
+        # Store (timestamp, port) pairs - use list for time-windowing
         timed_key = f"port_scan_ts:{src_ip}"
         ts_bucket = windows.setdefault(timed_key, [])
         ts_bucket.append((now, dst_port))

@@ -1,5 +1,5 @@
 """
-AetherGuard Sentinel — FastAPI Backend Entry Point
+AetherGuard Sentinel - FastAPI Backend Entry Point
 Real-Time Threat Detection & SOC Intelligence Platform
 """
 import asyncio
@@ -9,10 +9,11 @@ import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
-# ── Path fix so imports work when run from backend/ directory ────────────────
+
+# -- Path fix so imports work when run from backend/ directory ----------------
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from backend.core.logging import setup_logging, get_logger
 from backend.core.middleware import RequestContextMiddleware
@@ -24,23 +25,44 @@ logger = get_logger("aetherguard")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup → yield → Shutdown."""
-    logger.info("━" * 60)
-    logger.info("  🛡️  AetherGuard Sentinel — Starting Up")
-    logger.info("━" * 60)
+    """Startup ? yield ? Shutdown."""
+    logger.info("=" * 60)
+    logger.info("  [*] AetherGuard Sentinel - Starting Up")
+    logger.info("=" * 60)
 
-    # 1. Database
-    from db.database import init_mongodb, init_tinydb
-    mongo_ok = await init_mongodb()
-    if not mongo_ok:
-        init_tinydb()
+    # 1. Real Databases Startup Validation (Points 2 & 25)
+    from backend.db.postgres import AsyncSessionLocal
+    from backend.db.clickhouse import ClickHouseClient
+    from backend.db.redis import check_redis_health
+    from sqlalchemy import text
 
-    from db.sqlite_db import init_sqlite
-    await init_sqlite()
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        logger.info("  [OK] PostgreSQL connected & verified")
+    except Exception as exc:
+        logger.error(f"  [FAIL] PostgreSQL connection failed: {exc}")
 
-    # 2. Default users
-    from services.auth_service import create_default_users
+    try:
+        ch = ClickHouseClient.get_client()
+        if ch:
+            ch.command("SELECT 1")
+            logger.info("  [OK] ClickHouse connected & verified")
+        else:
+            logger.warning("  [WARN] ClickHouse client unavailable")
+    except Exception as exc:
+        logger.error(f"  [FAIL] ClickHouse connection failed: {exc}")
+
+    if await check_redis_health():
+        logger.info("  [OK] Redis connected & verified")
+    else:
+        logger.warning("  [WARN] Redis unavailable")
+
+    # 2. Seed Default Users & Detection Rules in PostgreSQL
+    from backend.services.auth_service import create_default_users
+    from backend.services.rule_seeder import seed_default_rules
     await create_default_users()
+    await seed_default_rules()
 
     # 3. ML engines
     from ml.anomaly_detector import AnomalyDetector
@@ -49,7 +71,9 @@ async def lifespan(app: FastAPI):
 
     anomaly_detector = AnomalyDetector()
     ueba_engine = UEBAEngine()
+    await ueba_engine.load_baselines_from_db()
     risk_scorer = RiskScorer(ueba_engine, anomaly_detector)
+
 
     # 4. WebSocket manager
     from websocket.manager import ConnectionManager
@@ -86,27 +110,27 @@ async def lifespan(app: FastAPI):
     app.state.syslog_receiver = syslog_receiver
     asyncio.create_task(syslog_receiver.start())
 
-    logger.info("━" * 60)
-    logger.info("  ✅  AetherGuard Sentinel is ONLINE")
-    logger.info("  📡  API:       http://localhost:8000")
-    logger.info("  📡  WebSocket: ws://localhost:8000/ws")
-    logger.info("  📡  API Docs:  http://localhost:8000/docs")
-    logger.info("  🔑  admin / aetherguard2024")
-    logger.info("  🔑  analyst / sentinel2024")
-    logger.info("━" * 60)
+    logger.info("=" * 60)
+    logger.info("  [ONLINE] AetherGuard Sentinel is READY")
+    logger.info("  API:       http://localhost:8000")
+    logger.info("  WebSocket: ws://localhost:8000/ws")
+    logger.info("  API Docs:  http://localhost:8000/docs")
+    logger.info("  admin / aetherguard2024")
+    logger.info("  analyst / sentinel2024")
+    logger.info("=" * 60)
 
     yield
 
-    logger.info("🛑 AetherGuard Sentinel shutting down...")
+    logger.info("[SHUTDOWN] AetherGuard Sentinel shutting down...")
     log_generator.stop()
     if hasattr(app.state, "syslog_receiver"):
         await app.state.syslog_receiver.stop()
 
 
-# ── FastAPI App ──────────────────────────────────────────────────────────────
+# -- FastAPI App --------------------------------------------------------------
 app = FastAPI(
     title="AetherGuard Sentinel API",
-    description="Enterprise SOC/SIEM Platform — Real-Time Threat Detection",
+    description="Enterprise SOC/SIEM Platform - Real-Time Threat Detection",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -127,14 +151,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ──────────────────────────────────────────────────────────────────
-from api.routes import auth, dashboard, logs, alerts, incidents, threat_intel, users, reports, ingest, signals
+from api.routes import auth, dashboard, logs, alerts, incidents, threat_intel, users, reports, ingest, signals, cases, rules, audit
 
 app.include_router(auth.router,         prefix="/api/auth",         tags=["Auth"])
 app.include_router(dashboard.router,    prefix="/api/dashboard",    tags=["Dashboard"])
 app.include_router(logs.router,         prefix="/api/logs",         tags=["Logs"])
 app.include_router(alerts.router,       prefix="/api/alerts",       tags=["Alerts"])
 app.include_router(incidents.router,    prefix="/api/incidents",    tags=["Incidents"])
+app.include_router(cases.router,        prefix="/api/cases",        tags=["Cases"])
+app.include_router(rules.router,        prefix="/api/rules",        tags=["Detection Rules"])
+app.include_router(audit.router,        prefix="/api/audit",        tags=["Audit"])
 app.include_router(threat_intel.router, prefix="/api/threat-intel", tags=["Threat Intel"])
 app.include_router(users.router,        prefix="/api/users",        tags=["Users"])
 app.include_router(reports.router,      prefix="/api/reports",      tags=["Reports"])
@@ -142,7 +168,8 @@ app.include_router(ingest.router,       prefix="/api/ingest",       tags=["Inges
 app.include_router(signals.router,      prefix="/api/signals",      tags=["Signals & AI"])
 
 
-# ── Core Endpoints ───────────────────────────────────────────────────────────
+
+# -- Core Endpoints -----------------------------------------------------------
 @app.get("/", tags=["Root"])
 async def root():
     return {
@@ -154,38 +181,112 @@ async def root():
     }
 
 
+@app.get("/metrics", tags=["Observability"])
+async def prometheus_metrics():
+    """Exposes Prometheus application metrics for scraping."""
+    from backend.core.metrics import get_metrics_response
+    return get_metrics_response()
+
+
+
 @app.get("/api/health", tags=["Health"])
 async def health():
-    from db.database import USE_MONGO
+    """Real granular healthcheck distinguishing Application, Database, Queue, and AI health (Point 24)."""
+    from backend.db.postgres import AsyncSessionLocal
     from backend.db.clickhouse import ClickHouseClient
+    from backend.db.redis import check_redis_health
+    from backend.services.ai_service import ai_service
+    from sqlalchemy import text
 
-    ch_status = "offline"
+    pg_status = "unavailable"
     try:
-        if ClickHouseClient.get_client():
-            ch_status = "online"
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+            pg_status = "healthy"
     except Exception:
-        pass
+        pg_status = "unavailable"
+
+    ch_status = "unavailable"
+    try:
+        ch = ClickHouseClient.get_client()
+        if ch and ch.command("SELECT 1") is not None:
+            ch_status = "healthy"
+    except Exception:
+        ch_status = "unavailable"
+
+    redis_ok = await check_redis_health()
+    redis_status = "healthy" if redis_ok else "unavailable"
+
+    ai_ok = await ai_service.check_health()
+    ai_status = "healthy" if ai_ok else "unavailable"
+
+    overall_status = "healthy" if (pg_status == "healthy" and ch_status == "healthy") else "degraded"
+    if pg_status == "unavailable" and ch_status == "unavailable":
+        overall_status = "unhealthy"
 
     return {
-        "status": "healthy",
-        "legacy_database": "mongodb" if USE_MONGO else "tinydb",
-        "postgres": "configured",
-        "clickhouse": ch_status,
+        "status": overall_status,
+        "database": {
+            "postgres": pg_status,
+            "clickhouse": ch_status
+        },
+        "redis": redis_status,
+        "ai": ai_status,
         "websocket_clients": getattr(app.state, "ws_manager", None) and app.state.ws_manager.client_count,
     }
 
 
+@app.get("/api/ready", tags=["Health"])
+async def ready():
+    """Readiness probe. If critical databases are down, returns 503 DATABASE_UNAVAILABLE (Point 2)."""
+    from backend.db.postgres import AsyncSessionLocal
+    from backend.db.clickhouse import ClickHouseClient
+    from sqlalchemy import text
+    from fastapi.responses import JSONResponse
+
+    pg_healthy = False
+    ch_healthy = False
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+            pg_healthy = True
+    except Exception:
+        pass
+
+    try:
+        ch = ClickHouseClient.get_client()
+        if ch and ch.command("SELECT 1") is not None:
+            ch_healthy = True
+    except Exception:
+        pass
+
+    if not pg_healthy or not ch_healthy:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "DATABASE_UNAVAILABLE",
+                "postgres": "healthy" if pg_healthy else "unavailable",
+                "clickhouse": "healthy" if ch_healthy else "unavailable"
+            }
+        )
+
+    return {"status": "READY", "postgres": "healthy", "clickhouse": "healthy"}
+
+
+from backend.api.middleware.auth import get_current_user
+
 @app.get("/api/ueba/users", tags=["UEBA"])
-async def ueba_users():
+async def ueba_users(current_user: dict = Depends(get_current_user)):
     return app.state.ueba_engine.get_top_risky_users()
 
 
 @app.get("/api/ueba/user/{username}", tags=["UEBA"])
-async def ueba_user(username: str):
+async def ueba_user(username: str, current_user: dict = Depends(get_current_user)):
     return app.state.ueba_engine.get_user_profile(username)
 
 
-# ── WebSocket Endpoint ───────────────────────────────────────────────────────
+
+# -- WebSocket Endpoint -------------------------------------------------------
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     ws_manager = app.state.ws_manager
@@ -198,7 +299,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 
 
-# ── Entry point ──────────────────────────────────────────────────────────────
+# -- Entry point --------------------------------------------------------------
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

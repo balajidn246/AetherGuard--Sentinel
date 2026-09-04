@@ -1,5 +1,5 @@
 """
-Detection Engine — evaluates every ingested log against all detection rules.
+Detection Engine - evaluates every ingested log against all detection rules.
 Matches trigger Alert creation and WebSocket broadcast.
 """
 import logging
@@ -24,7 +24,7 @@ class DetectionEngine:
         rules_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rules', 'custom')
         self.yaml_engine = YamlDetectionEngine(rules_path)
         
-        logger.info(f"🔍 Detection Engine loaded {len(self._rules)} python rules and {len(self.yaml_engine.rules)} yaml rules")
+        logger.info(f"[DETECTION] Loaded {len(self._rules)} python rules and {len(self.yaml_engine.rules)} yaml rules")
 
     def _load_rules(self) -> list:
         from detections.rules.brute_force import BruteForceRule
@@ -74,9 +74,39 @@ class DetectionEngine:
             logger.error(f"YAML Engine evaluation error: {exc}")
 
     async def _create_alert(self, log: dict, match: dict):
-        from db.database import db_insert
-        alert = {
-            "_id": str(uuid.uuid4()),
+        from backend.db.postgres import AsyncSessionLocal
+        from backend.models.signal import SecuritySignal
+        
+        signal_id = str(uuid.uuid4())
+        
+        # 1. Save to Real Database (PostgreSQL)
+        try:
+            async with AsyncSessionLocal() as session:
+                new_signal = SecuritySignal(
+                    id=signal_id,
+                    tenant_id=log.get("tenant_id", "default"),
+                    title=match["title"],
+                    description=match["description"],
+                    severity=match["severity"],
+                    status="new",
+                    rule_name=match.get("rule_name", "unknown"),
+                    source_ip=log.get("source_ip", ""),
+                    hostname=log.get("hostname", ""),
+                    username=log.get("username", ""),
+                    tags=match.get("tags", []),
+                    evidence_refs=[log.get("id", log.get("_id", "unknown"))],
+                    mitre_tactics=match.get("mitre_techniques", []),
+                    source_alert_id=match.get("rule_name", "unknown")
+                )
+                session.add(new_signal)
+                await session.commit()
+                logger.info(f"[POSTGRES] Persisted Security Signal {signal_id}")
+        except Exception as e:
+            logger.error(f"Failed to persist signal to Postgres: {e}")
+
+        # 2. Real-Time UI WebSocket Broadcast (Point 35)
+        alert_payload = {
+            "_id": signal_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "title": match["title"],
             "description": match["description"],
@@ -85,14 +115,35 @@ class DetectionEngine:
             "source_ip": log.get("source_ip", ""),
             "hostname": log.get("hostname", ""),
             "username": log.get("username", ""),
-            "log_id": log.get("_id", ""),
+            "log_id": log.get("id", ""),
             "mitre_techniques": match.get("mitre_techniques", []),
             "tags": match.get("tags", []),
             "acknowledged": False,
-            "acknowledged_by": None,
-            "incident_id": None,
-            "raw_log_snippet": log.get("raw_log", "")[:200],
         }
-        await db_insert("alerts", alert)
-        await self.ws_manager.send_alert(alert)
-        logger.info(f"🚨 ALERT [{alert['severity'].upper()}] {alert['title']}")
+        await self.ws_manager.send_alert(alert_payload)
+        logger.info(f"[ALERT] [{alert_payload['severity'].upper()}] {alert_payload['title']}")
+
+        # 3. Autonomous AI Triage for High/Critical Signals
+        if match.get("severity", "").lower() in ["critical", "high"]:
+            import asyncio
+            from backend.services.ai_gateway import ai_gateway
+            sig_dict = {
+                "id": signal_id,
+                "title": match["title"],
+                "description": match["description"],
+                "severity": match["severity"],
+                "rule_name": match.get("rule_name", "unknown"),
+                "source_ip": log.get("source_ip", ""),
+                "mitre_techniques": match.get("mitre_techniques", [])
+            }
+            asyncio.create_task(
+                ai_gateway.investigate_signal(
+                    signal_dict=sig_dict,
+                    evidence_events=[log],
+                    actor_id="autonomous_agent",
+                    actor_username="AetherGuard-AI",
+                    tenant_id=log.get("tenant_id", "default"),
+                    ws_manager=self.ws_manager
+                )
+            )
+

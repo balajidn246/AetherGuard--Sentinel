@@ -1,4 +1,4 @@
-"""Risk scorer — composite risk score for users/hosts."""
+"""Risk scorer - composite risk score for users/hosts."""
 import logging
 
 logger = logging.getLogger(__name__)

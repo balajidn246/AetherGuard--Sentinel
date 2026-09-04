@@ -3,20 +3,23 @@ import useStore from '../store/useStore'
 import {
   LayoutDashboard, FileText, Bell, AlertTriangle, Shield,
   Map, Users, BarChart3, Settings, ChevronLeft, ChevronRight,
-  LogOut, Activity, Database, Zap
+  LogOut, Activity, Database, Zap, FolderGit2, ShieldCheck, History
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard',      desc: 'Live Overview' },
   { to: '/logs',         icon: FileText,        label: 'Log Explorer',   desc: 'Search & Query' },
   { to: '/alerts',       icon: Bell,            label: 'Alerts',         desc: 'Active Threats' },
+  { to: '/cases',        icon: FolderGit2,      label: 'Cases',          desc: 'Investigations' },
   { to: '/incidents',    icon: AlertTriangle,   label: 'Incidents',      desc: 'IR Workflow' },
+  { to: '/rules',        icon: ShieldCheck,     label: 'Rules',          desc: 'Detection Engine' },
   { to: '/threat-intel', icon: Shield,          label: 'Threat Intel',   desc: 'IOC & Feeds' },
-  { to: '/attack-map',   icon: Map,             label: 'Attack Map',     desc: 'Geo Visualization' },
   { to: '/ueba',         icon: Users,           label: 'UEBA',           desc: 'Behavior Analytics' },
+  { to: '/audit',        icon: History,         label: 'Audit Log',      desc: 'Compliance Trails' },
   { to: '/reports',      icon: BarChart3,       label: 'Reports',        desc: 'Export & Analysis' },
   { to: '/settings',     icon: Settings,        label: 'Settings',       desc: 'System Config' },
 ]
+
 
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, user, logout, unreadAlerts } = useStore()

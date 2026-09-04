@@ -15,6 +15,9 @@ import AttackMapPage from './pages/AttackMapPage'
 import UEBAPage from './pages/UEBAPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
+import CasesPage from './pages/CasesPage'
+import DetectionRulesPage from './pages/DetectionRulesPage'
+import AuditPage from './pages/AuditPage'
 
 function Layout({ children }) {
   useWebSocket()
@@ -54,17 +57,23 @@ function AppRoutes() {
       <Route path="/alerts" element={
         <ProtectedRoute><Layout><AlertsPage /></Layout></ProtectedRoute>
       } />
+      <Route path="/cases" element={
+        <ProtectedRoute><Layout><CasesPage /></Layout></ProtectedRoute>
+      } />
       <Route path="/incidents" element={
         <ProtectedRoute><Layout><IncidentsPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/rules" element={
+        <ProtectedRoute><Layout><DetectionRulesPage /></Layout></ProtectedRoute>
       } />
       <Route path="/threat-intel" element={
         <ProtectedRoute><Layout><ThreatIntelPage /></Layout></ProtectedRoute>
       } />
-      <Route path="/attack-map" element={
-        <ProtectedRoute><Layout><AttackMapPage /></Layout></ProtectedRoute>
-      } />
       <Route path="/ueba" element={
         <ProtectedRoute><Layout><UEBAPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/audit" element={
+        <ProtectedRoute><Layout><AuditPage /></Layout></ProtectedRoute>
       } />
       <Route path="/reports" element={
         <ProtectedRoute><Layout><ReportsPage /></Layout></ProtectedRoute>
@@ -73,6 +82,7 @@ function AppRoutes() {
         <ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
     </Routes>
   )
 }

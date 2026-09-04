@@ -1,4 +1,4 @@
-"""Data exfiltration detection — high outbound byte transfers."""
+"""Data exfiltration detection - high outbound byte transfers."""
 from detections.rules.base import BaseRule
 
 BYTES_THRESHOLD = 10_000_000  # 10 MB

@@ -45,9 +45,12 @@ class SyslogReceiver:
 
     async def start(self):
         """Starts the async TCP server for Syslog."""
-        self.server = await asyncio.start_server(self.handle_client, self.host, self.port)
-        addrs = ', '.join(str(sock.getsockname()) for sock in self.server.sockets)
-        logger.info(f"Syslog receiver started on {addrs}")
+        try:
+            self.server = await asyncio.start_server(self.handle_client, self.host, self.port)
+            addrs = ', '.join(str(sock.getsockname()) for sock in self.server.sockets)
+            logger.info(f"Syslog receiver started on {addrs}")
+        except OSError as e:
+            logger.warning(f"Syslog receiver could not bind to {self.host}:{self.port} ({e}). Telemetry can still be sent via /api/ingest.")
 
     async def stop(self):
         """Gracefully shuts down the Syslog server."""

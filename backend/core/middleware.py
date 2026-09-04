@@ -5,7 +5,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import structlog
 from backend.core.security import decode_token
 from backend.core.context import RequestContext
-from backend.core.permissions import ROLE_PERMISSIONS
+from backend.core.permissions import ROLE_PERMISSIONS, Permission
+from backend.config.settings import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -21,29 +22,43 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         roles = []
         permissions = set()
         
-        # Attempt to extract JWT token from Authorization header
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-            payload = decode_token(token)
-            if payload:
-                user_id = payload.get("sub", user_id)
-                username = payload.get("username", username)
-                tenant_id = payload.get("tenant_id", "default")
-                
-                # Handle legacy role formats and map to new permissions
-                role = payload.get("role")
-                if role:
-                    roles = [role]
-                    permissions = ROLE_PERMISSIONS.get(role, set())
-                
-                # Also support modern explicit roles/permissions array if present
-                if "roles" in payload:
-                    roles = payload["roles"]
-                if "permissions" in payload:
-                    permissions = permissions.union(set(payload["permissions"]))
+        # 1. Check API Key Header for ingestion / automated collectors
+        api_key = request.headers.get("X-AetherGuard-Key") or request.headers.get("X-API-Key")
+        if api_key and api_key == settings.INGEST_API_KEY:
+            user_id = "ingest_service"
+            username = "ingest_service"
+            tenant_id = request.headers.get("X-Tenant-ID", "default")
+            roles = ["ingest"]
+            permissions = {Permission.EVENTS_WRITE, Permission.EVENTS_READ}
+        else:
+            # 2. Extract JWT token from Authorization header
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+                payload = decode_token(token)
+                if payload:
+                    user_id = payload.get("sub", user_id)
+                    username = payload.get("username", username)
+                    tenant_id = payload.get("tenant_id", "default")
+                    
+                    role = payload.get("role")
+                    if role:
+                        roles = [role]
+                        permissions = ROLE_PERMISSIONS.get(role, set()).copy()
+                    
+                    if "roles" in payload:
+                        roles = payload["roles"]
+                    if "permissions" in payload:
+                        permissions = permissions.union(set(payload["permissions"]))
+            elif settings.ENVIRONMENT == "development" and request.url.path.startswith("/api/ingest"):
+                # Development mode grace for local testing
+                user_id = "dev_ingest"
+                username = "dev_ingest"
+                tenant_id = request.headers.get("X-Tenant-ID", "default")
+                roles = ["ingest"]
+                permissions = {Permission.EVENTS_WRITE, Permission.EVENTS_READ}
         
-        # Create the typed RequestContext
+        # Create typed RequestContext
         context = RequestContext(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -54,10 +69,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             ip_address=request.client.host if request.client else ""
         )
         
-        # Attach to request state for FastAPI dependencies (like `require()`)
         request.state.context = context
         
-        # Bind to structured logger context for all subsequent logs in this request
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
@@ -67,7 +80,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             method=request.method
         )
         
-        # Process request
         response = await call_next(request)
         
         process_time = time.time() - start_time

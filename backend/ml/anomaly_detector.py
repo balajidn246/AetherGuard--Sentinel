@@ -1,5 +1,5 @@
 """
-ML Anomaly Detector — IsolationForest based anomaly scoring for log events.
+ML Anomaly Detector - IsolationForest based anomaly scoring for log events.
 Trains on synthetic baseline data, scores each event 0-1.
 """
 import logging
@@ -37,7 +37,7 @@ class AnomalyDetector:
         X = np.vstack([normal, anomalies])
         self.model.fit(X)
         self._trained = True
-        logger.info("✅ AnomalyDetector trained on synthetic baseline")
+        logger.info("[ANOMALY] Detector trained on synthetic baseline")
 
     def score(self, log: dict) -> float:
         """Return anomaly score 0-1 (higher = more anomalous)."""
