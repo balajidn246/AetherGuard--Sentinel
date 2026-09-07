@@ -32,10 +32,11 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8123/ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     ulimits:
       nofile:
         soft: 262144
@@ -77,6 +78,13 @@ services:
       - "9090:9090"
     volumes:
       - prometheus_data:/prometheus
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
     restart: unless-stopped
 
   grafana:
@@ -88,6 +96,9 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
     restart: unless-stopped
 
 volumes:

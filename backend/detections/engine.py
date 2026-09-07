@@ -10,6 +10,12 @@ from typing import List
 import os
 from backend.detections.yaml_engine import YamlDetectionEngine
 
+try:
+    from backend.core.metrics import SIGNALS_CREATED
+    _metrics_enabled = True
+except Exception:
+    _metrics_enabled = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,9 +96,9 @@ class DetectionEngine:
                     severity=match["severity"],
                     status="new",
                     rule_name=match.get("rule_name", "unknown"),
-                    source_ip=log.get("source_ip", ""),
-                    hostname=log.get("hostname", ""),
-                    username=log.get("username", ""),
+                    source_ip=log.get("source_ip") or log.get("src_ip", ""),
+                    hostname=log.get("hostname") or log.get("host_name", ""),
+                    username=log.get("username") or log.get("user_name", ""),
                     tags=match.get("tags", []),
                     evidence_refs=[log.get("id", log.get("_id", "unknown"))],
                     mitre_tactics=match.get("mitre_techniques", []),
@@ -101,6 +107,12 @@ class DetectionEngine:
                 session.add(new_signal)
                 await session.commit()
                 logger.info(f"[POSTGRES] Persisted Security Signal {signal_id}")
+                if _metrics_enabled:
+                    SIGNALS_CREATED.labels(
+                        tenant_id=log.get("tenant_id", "default"),
+                        severity=match["severity"],
+                        rule=match.get("rule_name", "unknown")
+                    ).inc()
         except Exception as e:
             logger.error(f"Failed to persist signal to Postgres: {e}")
 
@@ -112,9 +124,9 @@ class DetectionEngine:
             "description": match["description"],
             "severity": match["severity"],
             "rule_name": match["rule_name"],
-            "source_ip": log.get("source_ip", ""),
-            "hostname": log.get("hostname", ""),
-            "username": log.get("username", ""),
+            "source_ip": log.get("source_ip") or log.get("src_ip", ""),
+            "hostname": log.get("hostname") or log.get("host_name", ""),
+            "username": log.get("username") or log.get("user_name", ""),
             "log_id": log.get("id", ""),
             "mitre_techniques": match.get("mitre_techniques", []),
             "tags": match.get("tags", []),
@@ -133,7 +145,7 @@ class DetectionEngine:
                 "description": match["description"],
                 "severity": match["severity"],
                 "rule_name": match.get("rule_name", "unknown"),
-                "source_ip": log.get("source_ip", ""),
+                "source_ip": log.get("source_ip") or log.get("src_ip", ""),
                 "mitre_techniques": match.get("mitre_techniques", [])
             }
             asyncio.create_task(

@@ -1,9 +1,9 @@
 export const SEVERITY_COLORS = {
-  critical: '#ff3366',
-  high: '#ff6b35',
-  medium: '#ffaa00',
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#eab308',
   low: '#3b82f6',
-  info: '#6b7280',
+  info: '#64748b',
 }
 
 export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info']
@@ -23,12 +23,22 @@ export const LOG_SOURCE_LABELS = {
 export const INCIDENT_STATUSES = ['open', 'investigating', 'contained', 'resolved', 'closed']
 
 export const STATUS_COLORS = {
-  open: '#ff3366',
-  investigating: '#ffaa00',
+  open: '#ef4444',
+  investigating: '#f97316',
   contained: '#3b82f6',
-  resolved: '#00ff88',
-  closed: '#6b7280',
+  resolved: '#10b981',
+  closed: '#64748b',
 }
+
+export const ALERT_LIFECYCLE_STATUSES = [
+  'NEW',
+  'TRIAGING',
+  'INVESTIGATING',
+  'ESCALATED',
+  'CONTAINED',
+  'RESOLVED',
+  'CLOSED'
+]
 
 export const MITRE_TACTICS = {
   'T1046': 'Discovery',
@@ -64,12 +74,30 @@ export function formatTime(iso) {
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-export function formatDateTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
+export function formatDateTime(value) {
+  if (!value) return '—'
+
+  const normalized = String(value).trim()
+
+  // Handle ClickHouse values such as:
+  // 2026-09-07 06:43:02.880
+  // by converting them to an ISO-like format.
+  const isoValue = normalized.includes(' ') && !normalized.includes('T')
+    ? normalized.replace(' ', 'T')
+    : normalized
+
+  const d = new Date(isoValue)
+
+  if (Number.isNaN(d.getTime())) {
+    return '—'
+  }
+
   return d.toLocaleString('en-US', {
-    month: 'short', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
     hour12: false,
   })
 }
@@ -89,9 +117,9 @@ export function severityBadgeClass(severity) {
 }
 
 export function getRiskColor(score) {
-  if (score >= 80) return '#ff3366'
-  if (score >= 60) return '#ff6b35'
-  if (score >= 40) return '#ffaa00'
+  if (score >= 80) return '#ef4444'
+  if (score >= 60) return '#f97316'
+  if (score >= 40) return '#eab308'
   if (score >= 20) return '#3b82f6'
-  return '#6b7280'
+  return '#10b981'
 }

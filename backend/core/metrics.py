@@ -9,21 +9,21 @@ from fastapi import Response
 EVENTS_INGESTED = Counter(
     "aetherguard_events_ingested_total",
     "Total security events ingested",
-    ["tenant_id", "source_log"]
+    ["tenant_id", "source"]
 )
 
 # 2. Detection Metrics
 SIGNALS_CREATED = Counter(
     "aetherguard_signals_created_total",
     "Total security signals created by detection engines",
-    ["tenant_id", "severity", "rule_name"]
+    ["tenant_id", "severity", "rule"]
 )
 
 # 3. AI Investigation Metrics
 AI_INVESTIGATIONS = Counter(
     "aetherguard_ai_investigations_total",
     "Total AI investigations executed",
-    ["provider", "verdict"]
+    ["verdict", "provider", "tenant_id"]
 )
 
 # 4. Infrastructure & Real-time Metrics
@@ -35,6 +35,7 @@ ACTIVE_WS_CLIENTS = Gauge(
 INGEST_LATENCY = Histogram(
     "aetherguard_ingest_duration_seconds",
     "Time spent processing and normalizing ingested events",
+    ["tenant_id"],
     buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]
 )
 

@@ -9,11 +9,18 @@ import re
 import json
 import logging
 from typing import List, Dict, Any
+from sqlalchemy import select
 from backend.schemas.ai_output import AIInvestigationResult
 from backend.services.ai_service import ai_service
 from backend.services.audit_service import audit_service
 from backend.db.postgres import AsyncSessionLocal
 from backend.models.signal import SecuritySignal
+
+try:
+    from backend.core.metrics import AI_INVESTIGATIONS
+    _metrics_enabled = True
+except Exception:
+    _metrics_enabled = False
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +96,19 @@ class AISecurityGateway:
 
         # 4. Strict schema validation
         try:
-            verdict_str = str(raw_res.get("verdict", "UNKNOWN")).upper()
-            if verdict_str not in ["MALICIOUS", "SUSPICIOUS", "BENIGN", "UNKNOWN", "INSUFFICIENT_EVIDENCE"]:
-                verdict_str = "SUSPICIOUS" if "suspicious" in verdict_str.lower() else "UNKNOWN"
+            raw_verdict = str(raw_res.get("verdict", "UNKNOWN")).strip().lower()
+
+            verdict_map = {
+                "true_positive": "MALICIOUS",
+                "false_positive": "BENIGN",
+                "malicious": "MALICIOUS",
+                "suspicious": "SUSPICIOUS",
+                "benign": "BENIGN",
+                "insufficient_evidence": "INSUFFICIENT_EVIDENCE",
+                "unknown": "UNKNOWN",
+            }
+
+            verdict_str = verdict_map.get(raw_verdict, "UNKNOWN")
 
             confidence_val = 0.5
             try:
@@ -104,15 +121,33 @@ class AISecurityGateway:
             except Exception:
                 confidence_val = 0.5
 
+            first_ev = evidence_events[0] if evidence_events else {}
+            src_ip = signal_dict.get('source_ip') or first_ev.get('src_ip') or first_ev.get('source_ip') or 'unknown'
+            host = signal_dict.get('hostname') or first_ev.get('host_name') or first_ev.get('hostname') or 'unknown'
+            user = signal_dict.get('username') or first_ev.get('user_name') or first_ev.get('username') or 'unknown'
+            attack_type = signal_dict.get('attack_type') or first_ev.get('attack_type') or 'unknown'
+            rule_name = signal_dict.get('rule_name', 'unknown')
+
             validated = AIInvestigationResult(
                 verdict=verdict_str,
                 severity=signal_dict.get("severity", "medium").lower(),
                 confidence=confidence_val,
                 summary=raw_res.get("analysis", ""),
-                observed_facts=[f"Source IP: {signal_dict.get('source_ip', 'unknown')}", f"Rule: {signal_dict.get('rule_name', 'unknown')}"],
+                observed_facts=[
+                    f"Source IP: {src_ip}",
+                    f"Host: {host}",
+                    f"User: {user}",
+                    f"Attack type: {attack_type}",
+                    f"Rule: {rule_name}",
+                ],
                 mitre_attack=signal_dict.get("mitre_techniques", []),
                 evidence_refs=[str(e.get("id") or e.get("event_id") or e.get("_id")) for e in evidence_events if e.get("id") or e.get("event_id") or e.get("_id")],
-                recommended_actions=["Review source IP history", "Check related host activity"],
+                recommended_actions=[
+                    raw_res.get(
+                        "recommended_action",
+                        "Review source IP history and related host activity."
+                    )
+                ],
                 provider=raw_res.get("provider", "ollama")
             )
         except Exception as vexc:
@@ -165,10 +200,24 @@ class AISecurityGateway:
                     "signal_id": sig_id,
                     "verdict": validated.verdict,
                     "confidence": validated.confidence,
-                    "summary": validated.summary
+                    "severity": validated.severity,
+                    "summary": validated.summary,
+                    "observed_facts": validated.observed_facts,
+                    "mitre_attack": validated.mitre_attack,
+                    "recommended_actions": validated.recommended_actions,
+                    "evidence_refs": validated.evidence_refs,
+                    "provider": validated.provider,
                 })
             except Exception as wexc:
                 logger.debug(f"[AI GATEWAY] WS broadcast notice: {wexc}")
+
+        # 8. Prometheus increment
+        if _metrics_enabled:
+            AI_INVESTIGATIONS.labels(
+                verdict=validated.verdict,
+                provider=validated.provider or "unknown",
+                tenant_id=tenant_id
+            ).inc()
 
         return validated
 

@@ -1,11 +1,17 @@
 import json
 import asyncio
 import uuid
+import time
 from typing import List
 from backend.core.logging import get_logger
 from backend.models.events import OCSFBaseEvent
 from backend.db.clickhouse import get_clickhouse
 from backend.pipeline.funnel import funnel
+try:
+    from backend.core.metrics import EVENTS_INGESTED, INGEST_LATENCY
+    _metrics_enabled = True
+except Exception:
+    _metrics_enabled = False
 
 logger = get_logger(__name__)
 
@@ -25,14 +31,23 @@ class IngestService:
             # 2. Bridge to Legacy Detection Engine & WebSocket
             if app_state:
                 legacy_dict = {
-                    "id": event.event_id,
+                    "id": str(event.event_id),
                     "timestamp": event.time.isoformat(),
-                    "message": event.message,
-                    "source_ip": str(event.src_ip) if event.src_ip else "unknown",
-                    "dest_ip": str(event.dst_ip) if event.dst_ip else "unknown",
+                    "message": event.message or "",
+                    "raw_data": event.raw_data or "",
+                    "source_ip": str(event.src_ip) if event.src_ip else "",
+                    "dest_ip": str(event.dst_ip) if event.dst_ip else "",
+                    "source_port": event.src_port or 0,
+                    "dest_port": event.dst_port or 0,
                     "event_type": event.class_name.lower() if event.class_name != "Unknown" else "log",
+                    "class_name": event.class_name,
+                    "category_name": event.category_name,
                     "severity": event.severity.lower(),
-                    "bytes_out": 0 # Default for legacy rules
+                    "username": event.user_name or "",
+                    "hostname": event.host_name or "",
+                    "process_name": event.process_name or "",
+                    "source_log": event.source_log or "",
+                    "bytes_out": 0,
                 }
                 
                 if hasattr(app_state, "detection_engine"):
@@ -50,6 +65,7 @@ class IngestService:
         
         # 3. Attempt to send to ClickHouse
         client = get_clickhouse()
+        _start = time.monotonic()
         if client:
             try:
                 data = [
@@ -89,6 +105,9 @@ class IngestService:
                 
                 client.insert('events', data, column_names=columns)
                 logger.info("Events ingested to ClickHouse", count=len(processed), tenant_id=tenant_id)
+                if _metrics_enabled:
+                    EVENTS_INGESTED.labels(tenant_id=tenant_id, source="api").inc(len(processed))
+                    INGEST_LATENCY.labels(tenant_id=tenant_id).observe(time.monotonic() - _start)
             except Exception as e:
                 logger.error("ClickHouse insert failed", error=str(e), count=len(processed))
         else:

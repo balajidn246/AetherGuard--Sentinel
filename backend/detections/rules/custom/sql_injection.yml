@@ -1,0 +1,16 @@
+﻿id: "rule-web-sqli-001"
+name: "SQL Injection Attempt"
+description: "Detects web events identified as SQL injection attempts"
+severity: "high"
+
+mitre:
+  - "T1190"
+
+conditions:
+  - field: "event_type"
+    operator: "equals"
+    value: "web attack"
+
+  - field: "message"
+    operator: "contains"
+    value: "attack_type=sql_injection"

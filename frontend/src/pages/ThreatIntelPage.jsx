@@ -12,6 +12,7 @@ export default function ThreatIntelPage() {
   const [ipLoading, setIpLoading] = useState(false)
   const [newIoc, setNewIoc] = useState({ ioc_type: 'ip', value: '', threat_type: 'malware', confidence: 75, notes: '' })
   const [loading, setLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   const fetchData = async () => {
     setLoading(true)
@@ -21,6 +22,16 @@ export default function ThreatIntelPage() {
       setFeeds(feedsRes.data)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
+  }
+
+  const syncFeeds = async () => {
+    setSyncing(true)
+    try {
+      const res = await threatIntelApi.syncFeeds()
+      toast.success(`Feed sync complete — ${res.data?.imported || 0} IOCs imported`)
+      fetchData()
+    } catch { toast.error('Feed sync failed') }
+    finally { setSyncing(false) }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -221,6 +232,15 @@ export default function ThreatIntelPage() {
             <div className="flex items-center gap-2 mb-3">
               <Shield size={14} color="#00d4ff" />
               <span className="text-sm font-bold text-white">Threat Feeds</span>
+              <button
+                className="ml-auto btn-cyber btn-cyber-primary"
+                onClick={syncFeeds}
+                disabled={syncing}
+                style={{ fontSize: '0.65rem', padding: '4px 10px' }}
+              >
+                <RefreshCw size={10} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'Syncing...' : 'Sync Now'}
+              </button>
             </div>
             <div className="space-y-2">
               {feeds.map(feed => (

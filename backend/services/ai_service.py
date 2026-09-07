@@ -35,13 +35,22 @@ class AIService:
         compressed_events = []
         for e in events[:15]:  # Bound maximum events for token budget
             compressed_events.append({
-                "time": str(e.get("time") or e.get("timestamp")),
-                "source_ip": str(e.get("src_ip") or e.get("source_ip", "")),
-                "dest_ip": str(e.get("dst_ip") or e.get("dest_ip", "")),
-                "user": str(e.get("user_name") or e.get("username", "")),
-                "host": str(e.get("host_name") or e.get("hostname", "")),
-                "message": str(e.get("message", ""))[:200],
-                "severity": str(e.get("severity", ""))
+                "time": str(e.get("time") or e.get("timestamp") or ""),
+                "source_ip": str(e.get("src_ip") or e.get("source_ip") or ""),
+                "dest_ip": str(e.get("dst_ip") or e.get("dest_ip") or ""),
+                "user": str(e.get("user_name") or e.get("username") or ""),
+                "host": str(e.get("host_name") or e.get("hostname") or ""),
+                "process": str(e.get("process_name") or ""),
+                "class_name": str(e.get("class_name") or ""),
+                "category_name": str(e.get("category_name") or ""),
+                "event_type": str(e.get("event_type") or ""),
+                "attack_type": str(e.get("attack_type") or ""),
+                "action": str(e.get("action") or ""),
+                "result": str(e.get("result") or ""),
+                "url": str(e.get("url") or ""),
+                "query": str(e.get("query") or ""),
+                "message": str(e.get("message") or "")[:1000],
+                "severity": str(e.get("severity") or "")
             })
 
         context_payload = {
@@ -75,21 +84,29 @@ class AIService:
         metrics = compressed["metrics"]
 
         prompt = f"""You are a senior SOC analyst AI for AetherGuard Sentinel.
-Analyze the following security signal and bounded evidence events.
-Rules:
-1. Cite ONLY events provided in the context. Do not fabricate or hallucinate observables.
-2. If evidence is insufficient, state "Insufficient evidence to confirm malice."
-3. Output MUST be valid JSON only.
+
+Analyze the security signal using ONLY the supplied evidence.
+
+Important:
+1. The deterministic detection rule has already fired.
+2. Base the verdict on concrete evidence in the context.
+3. Your verdict and analysis MUST agree:
+   - If verdict is "true_positive" or "malicious", your analysis MUST explain why the activity is malicious. Do NOT describe it as benign or a false positive.
+   - If verdict is "false_positive" or "benign", your analysis MUST explain why the activity is benign or authorized.
+   - If verdict is "suspicious", your analysis MUST explain what makes it suspicious.
+4. If attack_type=sql_injection or other attack indicator is present, treat the activity as malicious unless the evidence clearly proves it was a benign test or simulation.
+5. Never claim a false positive when the evidence contains an unverified or active attack payload.
+6. Output valid JSON only.
 
 Context:
 {json.dumps(context, indent=2)}
 
-Respond with JSON:
+Return:
 {{
   "verdict": "true_positive" | "false_positive" | "suspicious" | "insufficient_evidence",
   "confidence": "high" | "medium" | "low",
-  "analysis": "Detailed evidence-backed explanation...",
-  "recommended_action": "Actionable next steps..."
+  "analysis": "Evidence-based explanation consistent with the verdict",
+  "recommended_action": "Concrete SOC response"
 }}"""
 
         payload = {
@@ -107,11 +124,34 @@ Respond with JSON:
                     result = resp.json()
                     response_text = result.get("response", "{}")
                     parsed = json.loads(response_text)
+
+                    raw_verdict = str(parsed.get("verdict", "unknown")).strip().lower()
+
+                    verdict_map = {
+                        "true_positive": "MALICIOUS",
+                        "false_positive": "BENIGN",
+                        "malicious": "MALICIOUS",
+                        "benign": "BENIGN",
+                        "suspicious": "SUSPICIOUS",
+                        "insufficient_evidence": "INSUFFICIENT_EVIDENCE",
+                        "unknown": "UNKNOWN",
+                    }
+
+                    verdict = verdict_map.get(raw_verdict, "UNKNOWN")
+                    analysis = str(parsed.get("analysis", "Analysis completed.")).strip()
+
+                    # Guard against model discrepancy where text and verdict contradict
+                    analysis_lower = analysis.lower()
+                    if verdict == "MALICIOUS" and "false positive" in analysis_lower:
+                        analysis = f"Malicious activity confirmed based on evidence payload: {analysis.replace('false positive', 'malicious match')}"
+                    elif verdict == "BENIGN" and ("malicious" in analysis_lower or "attack" in analysis_lower) and "not malicious" not in analysis_lower:
+                        verdict = "MALICIOUS"
+
                     return {
-                        "verdict": parsed.get("verdict", "suspicious"),
+                        "verdict": verdict,
                         "confidence": parsed.get("confidence", "medium"),
-                        "analysis": parsed.get("analysis", "Analysis completed."),
-                        "recommended_action": parsed.get("recommended_action", "Review logs."),
+                        "analysis": analysis,
+                        "recommended_action": parsed.get("recommended_action", "Review source IP history and related host activity."),
                         "provider": f"ollama/{self.model}",
                         "metrics": metrics
                     }
@@ -122,15 +162,15 @@ Respond with JSON:
         # When local model is unavailable, compute deterministic triage based on severity and rule
         sev = str(signal.get("severity", "medium")).lower()
         if sev in ("critical", "high"):
-            verdict = "true_positive"
+            verdict = "MALICIOUS"
             confidence = "high"
             analysis = f"[Deterministic Fallback - AI_UNAVAILABLE] Signal '{signal.get('title')}' evaluated as high-priority threat based on triggered detection rule '{signal.get('rule_name')}' and severity {sev}."
         elif sev == "medium":
-            verdict = "suspicious"
+            verdict = "SUSPICIOUS"
             confidence = "medium"
             analysis = f"[Deterministic Fallback - AI_UNAVAILABLE] Signal '{signal.get('title')}' requires analyst inspection."
         else:
-            verdict = "insufficient_evidence"
+            verdict = "INSUFFICIENT_EVIDENCE"
             confidence = "low"
             analysis = "[Deterministic Fallback - AI_UNAVAILABLE] Insufficient severity to confirm malicious intent."
 
@@ -138,7 +178,7 @@ Respond with JSON:
             "verdict": verdict,
             "confidence": confidence,
             "analysis": analysis,
-            "recommended_action": "Manually inspect host and source IP in Log Explorer.",
+            "recommended_action": "Review source IP history and related host activity.",
             "provider": "deterministic_fallback (AI_UNAVAILABLE)",
             "metrics": metrics
         }

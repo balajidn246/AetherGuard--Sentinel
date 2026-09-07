@@ -60,6 +60,20 @@ const useStore = create((set, get) => ({
   eps: 0,
   setEps: (v) => set({ eps: v }),
 
+  // AI Investigations
+  aiInvestigations: {},
+  setAIInvestigation: (signalId, investigation) => set((state) => ({
+    aiInvestigations: {
+      ...state.aiInvestigations,
+      [signalId]: investigation,
+    },
+  })),
+  clearAIInvestigation: (signalId) => set((state) => {
+    const next = { ...state.aiInvestigations }
+    delete next[signalId]
+    return { aiInvestigations: next }
+  }),
+
   // Theme (dark / light)
   theme: localStorage.getItem('ag_theme') || 'dark',
   toggleTheme: () => {

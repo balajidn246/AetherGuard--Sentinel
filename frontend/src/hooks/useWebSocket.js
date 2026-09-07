@@ -8,6 +8,7 @@ export function useWebSocket() {
   const addAlert = useStore(s => s.addAlert)
   const setWsConnected = useStore(s => s.setWsConnected)
   const setEps = useStore(s => s.setEps)
+  const setAIInvestigation = useStore(s => s.setAIInvestigation)
 
   useEffect(() => {
     wsService.connect()
@@ -23,11 +24,26 @@ export function useWebSocket() {
     const offStats = wsService.on('stats', (data) => {
       if (data?.eps !== undefined) setEps(data.eps)
     })
+    const offAI = wsService.on('AI_INVESTIGATION_COMPLETE', (data) => {
+      if (!data?.signal_id) return
+
+      setAIInvestigation(data.signal_id, data)
+
+      toast.success(
+        `AI investigation complete: ${data.verdict || 'UNKNOWN'}`,
+        { autoClose: 5000 }
+      )
+    })
     const offConn = wsService.on('connected', () => setWsConnected(true))
     const offDisc = wsService.on('disconnected', () => setWsConnected(false))
 
     return () => {
-      offLog(); offAlert(); offStats(); offConn(); offDisc()
+      offLog()
+      offAlert()
+      offStats()
+      offAI()
+      offConn()
+      offDisc()
     }
   }, [])
 }
