@@ -1,13 +1,15 @@
-# AetherGuard--Sentinel
+# AetherGuard Sentinel
 
 ![Status](https://img.shields.io/badge/status-production--ready-brightgreen)
-![Python](https://img.shields.io/badge/python-3.13-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)
-![React](https://img.shields.io/badge/react-19.2-61dafb)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791)
-![ClickHouse](https://img.shields.io/badge/ClickHouse-latest-ffcc00)
-![Ollama](https://img.shields.io/badge/Ollama-llama3.2:1b-white)
-![Prometheus](https://img.shields.io/badge/Prometheus-metrics-e6522c)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-06B6D4?style=for-the-badge&logo=tailwindcss)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?style=for-the-badge&logo=postgresql)
+![ClickHouse](https://img.shields.io/badge/ClickHouse-FFCC00?style=for-the-badge&logo=clickhouse&logoColor=black)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus)
+![Ollama](https://img.shields.io/badge/Ollama-llama3.2:1b-white?style=for-the-badge)
 
 A serious, integrated, production-oriented open-source Cybersecurity Operations Platform (SIEM / UEBA / SOAR) powered by local LLM reasoning.
 
@@ -20,7 +22,7 @@ A serious, integrated, production-oriented open-source Cybersecurity Operations 
                         (Syslog RFC 3164/5424 | HTTP OCSF Ingest)
                                             │
                                             ▼
-                               [ Pipeline Funnel & Dedup ]
+                                [ Pipeline Funnel & Dedup ]
                                             │
                     ┌───────────────────────┴───────────────────────┐
                     ▼                                               ▼
@@ -44,11 +46,12 @@ A serious, integrated, production-oriented open-source Cybersecurity Operations 
 
 ## Core Capabilities
 
-* **Real Telemetry Pipeline**: RFC 3164/5424 Syslog receiver and high-throughput OCSF batch ingestion.
+* **Real Telemetry Pipeline**: RFC 3164/5424 Syslog receiver (`:5514`) and high-throughput OCSF batch ingestion.
 * **Dual Database Architecture**:
   * **ClickHouse**: Petabyte-scale columnar storage for raw security events with skipping indexes on `src_ip`, `user_name`, and `host_name`.
   * **PostgreSQL 16**: Relational storage for security signals, cases, detection rules, UEBA snapshots, and immutable audit trails.
 * **Autonomous AI Triage**: Local LLM reasoning (`llama3.2:1b` via Ollama) with strict PII/secret scrubbing, prompt injection defense, and schema validation.
+* **SOAR Playbooks**: Automated and analyst-gated containment actions (e.g. host isolation, credential revocation, IP blocking).
 * **Incident & Case Management**: End-to-end investigation workspace with signal attachment, chronological notes, and status lifecycle.
 * **Stateful UEBA Engine**: Hourly user profiling, statistical deviation detection, and PostgreSQL historical persistence.
 * **Observability**: Native `/metrics` endpoint with Prometheus counters/histograms and pre-provisioned Grafana datasources.
@@ -61,13 +64,20 @@ A serious, integrated, production-oriented open-source Cybersecurity Operations 
 * [Docker Desktop](https://www.docker.com/) (Engine 24+)
 * Python 3.11+
 * Node.js 18+
+* [Ollama](https://ollama.ai/) with `llama3.2:1b` pulled (`ollama pull llama3.2:1b`)
 
-### 2. Launch Services
+### 2. Clone Repository
 ```bash
-# Start Docker infrastructure (Postgres, ClickHouse, Redis, Ollama, Prometheus, Grafana)
+git clone https://github.com/balajidn246/AetherGuard--Sentinel.git
+cd AetherGuard--Sentinel
+```
+
+### 3. Launch Infrastructure & Backend
+```bash
+# Start Docker infrastructure (Postgres, ClickHouse, Redis, Prometheus, Grafana)
 docker compose up -d
 
-# Start Backend API
+# Start Backend API & Syslog Receiver
 # (Windows PowerShell)
 $env:PYTHONPATH = "."
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
@@ -77,14 +87,16 @@ export PYTHONPATH="."
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### 3. Launch Frontend UI
+Backend runs on: `http://localhost:8000` (Syslog listener on UDP/TCP port `5514`).
+
+### 4. Launch Frontend UI
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173` in your browser.
+Frontend runs on: `http://localhost:5173`.
 
 ---
 
@@ -113,6 +125,27 @@ python backend/tests/test_phase2_expansion.py
 
 # Production End-to-End Test (7/7 passing with live Ollama AI)
 python backend/tests/test_production_e2e.py
+
+# Full SOC Syslog-to-Case Workflow Test (7/7 passing)
+python backend/tests/test_full_soc_workflow.py
+```
+
+---
+
+## Troubleshooting
+
+### Port Already In Use
+Kill conflicting processes:
+
+#### Windows
+```powershell
+taskkill /F /IM python.exe
+taskkill /F /IM node.exe
+```
+
+#### Linux / macOS
+```bash
+killall -9 python python3 node
 ```
 
 ---
@@ -128,4 +161,4 @@ python backend/tests/test_production_e2e.py
 ---
 
 ## License
-Apache 2.0
+[Apache 2.0](LICENSE)
