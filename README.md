@@ -11,7 +11,7 @@
 ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus)
 ![Ollama](https://img.shields.io/badge/Ollama-llama3.2:1b-white?style=for-the-badge)
 
-A serious, integrated, production-oriented open-source Cybersecurity Operations Platform (SIEM / UEBA / SOAR) powered by local LLM reasoning.
+A  integrated, production-oriented open-source Cybersecurity Operations Platform (SIEM / UEBA / SOAR) powered by local LLM reasoning.
 
 ---
 
