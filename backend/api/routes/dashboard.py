@@ -46,8 +46,9 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
             for row in r_sev.result_rows:
                 sev_key = str(row[0]).lower()
                 severity_breakdown[sev_key] = row[1]
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Dashboard query error: {e}")
 
     # 2. Real PostgreSQL signals and incidents metrics
     total_alerts = 0
@@ -95,8 +96,9 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
                 Incident.status == "contained"
             )
             contained = (await session.execute(inc_cont_stmt)).scalar() or 0
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Dashboard query error (Postgres): {e}")
 
     return {
         "total_logs": total_logs,
@@ -134,8 +136,9 @@ async def get_eps_history(current_user: dict = Depends(get_current_user)):
             result = ch_client.query(query, parameters={"t": tenant_id})
             for row in result.result_rows:
                 history.append({"time": row[0], "eps": row[1]})
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Dashboard query error: {e}")
 
     return history
 
@@ -160,8 +163,9 @@ async def get_top_attackers(current_user: dict = Depends(get_current_user)):
             result = ch_client.query(query, parameters={"t": tenant_id})
             for row in result.result_rows:
                 top.append({"ip": row[0], "count": row[1]})
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Dashboard query error: {e}")
 
     return top
 
@@ -186,8 +190,9 @@ async def get_top_targets(current_user: dict = Depends(get_current_user)):
             result = ch_client.query(query, parameters={"t": tenant_id})
             for row in result.result_rows:
                 top.append({"hostname": row[0], "count": row[1]})
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Dashboard query error: {e}")
 
     return top
 
@@ -206,8 +211,9 @@ async def get_mitre_coverage(current_user: dict = Depends(get_current_user)):
                 if isinstance(tactics, list):
                     for t in tactics:
                         technique_counts[t] = technique_counts.get(t, 0) + 1
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"MITRE coverage error: {e}")
 
     return [
         {"technique": t, "count": c}
@@ -240,8 +246,9 @@ async def get_geo_attacks(current_user: dict = Depends(get_current_user)):
                     "event_type": row[2],
                     "time": str(row[3])
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Dashboard query error: {e}")
 
     return attacks
 
@@ -277,8 +284,9 @@ async def get_recent_alerts(current_user: dict = Depends(get_current_user)):
                     "ai_analysis": s.ai_analysis,
                     "evidence_refs": s.evidence_refs or []
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Dashboard query error: {e}")
 
     return alerts
 
@@ -314,7 +322,8 @@ async def get_severity_timeline(current_user: dict = Depends(get_current_user)):
                     "medium": row[3],
                     "low": row[4]
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Dashboard query error: {e}")
 
     return timeline

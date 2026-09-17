@@ -132,7 +132,9 @@ class DetectionEngine:
             "tags": match.get("tags", []),
             "acknowledged": False,
         }
-        await self.ws_manager.send_alert(alert_payload)
+        # Broadcast alert to specific tenant via WebSocket
+        tenant_id = log.get("tenant_id", "default")
+        await self.ws_manager.send_alert(alert_payload, tenant_id)
         logger.info(f"[ALERT] [{alert_payload['severity'].upper()}] {alert_payload['title']}")
 
         # 3. Autonomous AI Triage for High/Critical Signals

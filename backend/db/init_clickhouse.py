@@ -49,12 +49,19 @@ def init_db():
     ) ENGINE = MergeTree()
     PARTITION BY toYYYYMM(time)
     ORDER BY (tenant_id, time, category_name)
+    TTL time + INTERVAL 30 DAY
     """
     
     try:
         client.command(create_events_table)
         logger.info("ClickHouse events table initialized.")
         
+        # Apply TTL to existing table if needed
+        try:
+            client.command("ALTER TABLE events MODIFY TTL time + INTERVAL 30 DAY")
+        except Exception as te:
+            logger.debug(f"TTL migration notice: {te}")
+            
         # In case the table already existed without indices, apply migration safely:
         indexes = [
             ("idx_src_ip", "ADD INDEX IF NOT EXISTS idx_src_ip src_ip TYPE bloom_filter(0.01) GRANULARITY 1"),

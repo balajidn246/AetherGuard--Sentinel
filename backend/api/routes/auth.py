@@ -83,7 +83,8 @@ async def list_users(current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(User))
+        tenant_id = current_user.get("tenant_id", "default")
+        result = await session.execute(select(User).where(User.tenant_id == tenant_id))
         users = result.scalars().all()
         return [
             {
@@ -94,6 +95,7 @@ async def list_users(current_user: dict = Depends(get_current_user)):
                 "full_name": u.full_name,
                 "department": u.department,
                 "is_active": u.is_active,
+                "tenant_id": u.tenant_id,
             }
             for u in users
         ]
@@ -109,6 +111,8 @@ async def add_user(body: CreateUserRequest, current_user: dict = Depends(get_cur
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 
+    tenant_id = current_user.get("tenant_id", "default")
+
     async with AsyncSessionLocal() as session:
         new_user = User(
             username=body.username,
@@ -118,6 +122,7 @@ async def add_user(body: CreateUserRequest, current_user: dict = Depends(get_cur
             full_name=body.full_name,
             department=body.department,
             is_active=True,
+            tenant_id=tenant_id,
         )
         session.add(new_user)
         await session.commit()

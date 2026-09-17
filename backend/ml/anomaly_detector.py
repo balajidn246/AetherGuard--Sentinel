@@ -19,28 +19,28 @@ class AnomalyDetector:
             random_state=42,
         )
         self._trained = False
-        self._train_on_synthetic()
+        self._buffer = []
+        self._max_buffer = 5000
 
-    def _train_on_synthetic(self):
-        """Train on synthetic baseline data so scoring works immediately."""
-        np.random.seed(42)
-        # Normal baseline: low risk, low anomaly score
-        normal = np.column_stack([
-            np.random.normal(20, 10, 1000).clip(0, 100),   # risk_score
-            np.random.uniform(0.0, 0.3, 1000),              # anomaly_score
+    def _fit_incremental(self, log: dict):
+        self._buffer.append([
+            float(log.get("risk_score", 20)),
+            float(log.get("anomaly_score", 0.1)),
         ])
-        # Inject some anomalies
-        anomalies = np.column_stack([
-            np.random.normal(85, 10, 50).clip(0, 100),
-            np.random.uniform(0.7, 1.0, 50),
-        ])
-        X = np.vstack([normal, anomalies])
-        self.model.fit(X)
-        self._trained = True
-        logger.info("[ANOMALY] Detector trained on synthetic baseline")
+        if len(self._buffer) > self._max_buffer:
+            self._buffer.pop(0)
+
+        # Retrain model periodically on real data
+        if not self._trained and len(self._buffer) >= 50:
+            self.model.fit(np.array(self._buffer))
+            self._trained = True
+            logger.info(f"[ANOMALY] Detector trained on {len(self._buffer)} real events")
+        elif self._trained and len(self._buffer) % 500 == 0:
+            self.model.fit(np.array(self._buffer))
 
     def score(self, log: dict) -> float:
         """Return anomaly score 0-1 (higher = more anomalous)."""
+        self._fit_incremental(log)
         if not self._trained:
             return 0.0
         features = np.array([[

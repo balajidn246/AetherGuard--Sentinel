@@ -18,8 +18,8 @@ logger = get_logger(__name__)
 class IngestService:
     @staticmethod
     async def process_events(events: List[OCSFBaseEvent], tenant_id: str, app_state=None) -> dict:
-        # 1. Deterministic Funnel (Compression)
-        events = funnel.process(events)
+        # 1. Deduplicate
+        events = await funnel.process(events)
         if not events:
             return {"status": "success", "ingested": 0}
             
@@ -59,8 +59,8 @@ class IngestService:
                     app_state.ueba_engine.record_event(legacy_dict, tenant_id)
                     
                 if hasattr(app_state, "ws_manager"):
-                    # Use create_task since send_log is async
-                    asyncio.create_task(app_state.ws_manager.send_log(legacy_dict))
+                    # Broadcast to specific tenant
+                    asyncio.create_task(app_state.ws_manager.send_log(legacy_dict, tenant_id))
 
         
         # 3. Attempt to send to ClickHouse

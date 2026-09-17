@@ -115,8 +115,6 @@ async def lifespan(app: FastAPI):
     logger.info("  API:       http://localhost:8000")
     logger.info("  WebSocket: ws://localhost:8000/ws")
     logger.info("  API Docs:  http://localhost:8000/docs")
-    logger.info("  admin / aetherguard2024")
-    logger.info("  analyst / sentinel2024")
     logger.info("=" * 60)
 
     yield
@@ -277,26 +275,40 @@ from backend.api.middleware.auth import get_current_user
 
 @app.get("/api/ueba/users", tags=["UEBA"])
 async def ueba_users(current_user: dict = Depends(get_current_user)):
-    return app.state.ueba_engine.get_top_risky_users()
+    tenant_id = current_user.get("tenant_id", "default")
+    return app.state.ueba_engine.get_top_risky_users(tenant_id)
 
 
 @app.get("/api/ueba/user/{username}", tags=["UEBA"])
 async def ueba_user(username: str, current_user: dict = Depends(get_current_user)):
-    return app.state.ueba_engine.get_user_profile(username)
+    tenant_id = current_user.get("tenant_id", "default")
+    return app.state.ueba_engine.get_user_profile(username, tenant_id)
 
 
 
-# -- WebSocket Endpoint -------------------------------------------------------
+from backend.core.security import decode_token
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=1008)
+        return
+        
+    payload = decode_token(token)
+    if not payload or "tenant_id" not in payload:
+        await websocket.close(code=1008)
+        return
+        
+    tenant_id = payload["tenant_id"]
     ws_manager = app.state.ws_manager
-    await ws_manager.connect(websocket)
+    await ws_manager.connect(websocket, tenant_id)
     try:
         while True:
             data = await websocket.receive_text()
             await ws_manager.handle_client_message(websocket, data)
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        ws_manager.disconnect(websocket, tenant_id)
 
 
 # -- Entry point --------------------------------------------------------------

@@ -207,7 +207,7 @@ class AISecurityGateway:
                     "recommended_actions": validated.recommended_actions,
                     "evidence_refs": validated.evidence_refs,
                     "provider": validated.provider,
-                })
+                }, tenant_id=tenant_id)
             except Exception as wexc:
                 logger.debug(f"[AI GATEWAY] WS broadcast notice: {wexc}")
 

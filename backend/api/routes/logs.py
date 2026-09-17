@@ -112,7 +112,10 @@ async def search_logs(
                 "log_source": r[15]
             })
     except Exception as e:
-        return {"logs": [], "total": 0, "limit": limit, "skip": skip, "error": str(e)}
+        import logging
+        logging.getLogger(__name__).error(f"ClickHouse search error: {e}")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
 
     return {"logs": logs_list, "total": total, "limit": limit, "skip": skip}
 

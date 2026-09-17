@@ -156,7 +156,7 @@ async def test_ueba_anomaly_detection():
 
 # ── SECTION 4: Pipeline Funnel Unit Tests ─────────────────────────────────────
 
-def test_funnel_deduplication():
+async def test_funnel_deduplication():
     """Funnel should deduplicate identical events within the time window"""
     from backend.pipeline.funnel import funnel
     from backend.models.events import OCSFBaseEvent
@@ -172,7 +172,7 @@ def test_funnel_deduplication():
         "source_log": "syslog",
     }
     events = [OCSFBaseEvent(**event_data) for _ in range(5)]
-    result = funnel.process(events)
+    result = await funnel.process(events)
     assert len(result) < 5, f"Funnel should deduplicate. Got {len(result)} events, expected fewer than 5"
     print(f"  [OK] Funnel deduplicated 5 identical events -> {len(result)} unique")
 
@@ -235,12 +235,20 @@ if __name__ == "__main__":
     run_test("Secret Scrubbing", test_secret_scrubbing)
     run_test("Prompt Injection Detection", test_prompt_injection_detection)
     run_test("Event Sanitization", test_event_sanitization)
-    run_test("Pipeline Funnel Dedup", test_funnel_deduplication)
     run_test("AI Schema Invalid Verdict", test_ai_schema_rejects_invalid_verdict)
     run_test("AI Schema Valid Verdicts", test_ai_schema_accepts_valid_verdicts)
 
     # Async tests
-    asyncio.run(run_async_tests(results))
+    async def run_all_async():
+        await run_async_tests(results)
+        try:
+            await test_funnel_deduplication()
+            results.append(("Pipeline Funnel Dedup", "PASS"))
+        except Exception as e:
+            results.append(("Pipeline Funnel Dedup", f"FAIL: {e}"))
+            print(f"  [FAIL] Pipeline Funnel Dedup: {e}")
+            
+    asyncio.run(run_all_async())
 
     print("\n" + "=" * 65)
     passed = sum(1 for _, s in results if s == "PASS")

@@ -161,4 +161,4 @@ killall -9 python python3 node
 ---
 
 ## License
-[Apache 2.0](LICENSE)
+[MIT License](LICENSE)

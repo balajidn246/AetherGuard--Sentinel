@@ -13,7 +13,8 @@ router = APIRouter()
 @router.get("/")
 async def list_users(current_user: dict = Depends(require_admin)):
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(User))
+        tenant_id = current_user.get("tenant_id", "default")
+        result = await session.execute(select(User).where(User.tenant_id == tenant_id))
         users = result.scalars().all()
         return [
             {
@@ -37,8 +38,9 @@ async def get_my_profile(current_user: dict = Depends(get_current_user)):
 @router.get("/{user_id}")
 async def get_user(user_id: str, current_user: dict = Depends(require_admin)):
     async with AsyncSessionLocal() as session:
+        tenant_id = current_user.get("tenant_id", "default")
         user = (await session.execute(
-            select(User).where(User.id == user_id)
+            select(User).where(User.id == user_id, User.tenant_id == tenant_id)
         )).scalar_one_or_none()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")

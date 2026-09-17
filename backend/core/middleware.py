@@ -6,7 +6,7 @@ import structlog
 from backend.core.security import decode_token
 from backend.core.context import RequestContext
 from backend.core.permissions import ROLE_PERMISSIONS, Permission
-from backend.config.settings import settings
+from backend.core.config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -79,6 +79,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             path=request.url.path,
             method=request.method
         )
+        
+        # --- Rate Limiting ---
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        from backend.db.redis import get_redis
+        r = await get_redis()
+        if r:
+            rl_key = f"ag:ratelimit:{client_ip}"
+            req_count = await r.incr(rl_key)
+            if req_count == 1:
+                await r.expire(rl_key, 60)
+            if req_count > 1000:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(status_code=429, content={"detail": "Too Many Requests"})
         
         response = await call_next(request)
         

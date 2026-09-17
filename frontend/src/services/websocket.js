@@ -19,8 +19,11 @@ class WebSocketService {
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return
 
+    const token = localStorage.getItem('ag_token') || ''
+    const wsUrlWithToken = `${WS_URL}?token=${token}`
+
     try {
-      this.ws = new WebSocket(WS_URL)
+      this.ws = new WebSocket(wsUrlWithToken)
 
       this.ws.onopen = () => {
         console.log('[WS] Connected to AetherGuard Sentinel')

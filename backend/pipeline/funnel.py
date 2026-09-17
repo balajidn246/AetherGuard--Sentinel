@@ -3,6 +3,7 @@ import time
 from typing import List
 from backend.core.logging import get_logger
 from backend.models.events import OCSFBaseEvent
+from backend.db.redis import get_redis
 
 logger = get_logger(__name__)
 
@@ -12,8 +13,6 @@ class DeterministicFunnel:
     security signals before AI processing, ensuring cost control and context limits.
     """
     def __init__(self):
-        # In-memory fallback (Redis should be used in production scale)
-        self._seen_hashes = {}
         self.dedup_window_seconds = 60
 
     def compute_hash(self, event: OCSFBaseEvent) -> str:
@@ -21,33 +20,31 @@ class DeterministicFunnel:
         content = f"{event.tenant_id}|{event.class_name}|{event.src_ip}|{event.dst_ip}|{event.message}"
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
-    def deduplicate(self, events: List[OCSFBaseEvent]) -> List[OCSFBaseEvent]:
+    async def deduplicate(self, events: List[OCSFBaseEvent]) -> List[OCSFBaseEvent]:
         """Drop events that are exact duplicates within the time window."""
-        now = time.time()
-        unique_events = []
-        
-        # Clean up old hashes
-        expired = [h for h, t in self._seen_hashes.items() if now - t > self.dedup_window_seconds]
-        for h in expired:
-            del self._seen_hashes[h]
+        r = await get_redis()
+        if not r:
+            logger.warning("[FUNNEL] Redis not available, skipping dedup")
+            return events
 
+        unique_events = []
         for event in events:
             event_hash = self.compute_hash(event)
-            if event_hash in self._seen_hashes:
-                continue
+            key = f"ag:funnel:dedup:{event_hash}"
             
-            self._seen_hashes[event_hash] = now
-            unique_events.append(event)
-            
+            # SETNX (Set if not exists)
+            is_new = await r.set(key, "1", ex=self.dedup_window_seconds, nx=True)
+            if is_new:
+                unique_events.append(event)
+                
         dropped = len(events) - len(unique_events)
         if dropped > 0:
             logger.info("Funnel deduplicated events", dropped=dropped)
             
         return unique_events
         
-    def process(self, events: List[OCSFBaseEvent]) -> List[OCSFBaseEvent]:
+    async def process(self, events: List[OCSFBaseEvent]) -> List[OCSFBaseEvent]:
         """Run events through the full deterministic funnel."""
-        # 1. Deduplicate
-        return self.deduplicate(events)
+        return await self.deduplicate(events)
 
 funnel = DeterministicFunnel()
