@@ -42,14 +42,17 @@ class UEBAEngine:
         except Exception as exc:
             logger.warning(f"[UEBA] Could not load snapshots from database: {exc}")
 
-    def record_event(self, log: dict, tenant_id: str = "default"):
-        username = log.get("username") or log.get("user_name", "unknown")
+    def record_event(self, log, tenant_id: str = "default"):
+        username = getattr(log, "user_name", None) or "unknown"
         if not username or username == "unknown":
             return
         bucket = self._hour_key()
         key = (tenant_id, username)
         self._user_hourly[key][bucket] += 1
-        risk = log.get("risk_score", 20)
+        
+        # OCSF severity mapped to risk score: INFO=1, LOW=2, MED=3, HIGH=4, CRIT=5
+        # Example naive mapping: risk = severity_id * 20
+        risk = getattr(log, "severity_id", 1) * 20
         self._user_risk[key].append(risk)
         # Keep last 1000 events per user in memory
         self._user_risk[key] = self._user_risk[key][-1000:]

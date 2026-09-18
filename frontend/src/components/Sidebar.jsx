@@ -3,7 +3,8 @@ import useStore from '../store/useStore'
 import {
   LayoutDashboard, FileText, Bell, AlertTriangle, Shield,
   Users, BarChart3, Settings, ChevronLeft, ChevronRight,
-  LogOut, Activity, Database, Zap, FolderGit2, ShieldCheck, History
+  LogOut, Activity, Database, Zap, FolderGit2, ShieldCheck, History,
+  Network, Globe
 } from 'lucide-react'
 
 const WORKFLOW_GROUPS = [
@@ -25,6 +26,7 @@ const WORKFLOW_GROUPS = [
       { to: '/logs', icon: FileText, label: 'Log Explorer', desc: 'ClickHouse Query' },
       { to: '/alerts', icon: Bell, label: 'Security Signals', desc: 'Threat Alerts' },
       { to: '/cases', icon: FolderGit2, label: 'Cases', desc: 'Investigations' },
+      { to: '/entity-graph', icon: Network, label: 'Entity Graph', desc: 'Security Graph' },
     ]
   },
   {
@@ -38,6 +40,7 @@ const WORKFLOW_GROUPS = [
     category: 'INTELLIGENCE',
     items: [
       { to: '/threat-intel', icon: Shield, label: 'Threat Intel', desc: 'IOCs & Feeds' },
+      { to: '/attack-map', icon: Globe, label: 'Attack Map', desc: 'Geo Telemetry' },
     ]
   },
   {

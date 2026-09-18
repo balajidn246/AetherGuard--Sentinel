@@ -52,7 +52,7 @@ class DetectionEngine:
             BeaconingRule(),
         ]
 
-    async def evaluate(self, log: dict):
+    async def evaluate(self, log):
         """Run all rules against a single log event."""
         # 1. Hardcoded Python Rules
         for rule in self._rules:
@@ -79,37 +79,74 @@ class DetectionEngine:
         except Exception as exc:
             logger.error(f"YAML Engine evaluation error: {exc}")
 
-    async def _create_alert(self, log: dict, match: dict):
+    async def _create_alert(self, log, match: dict):
         from backend.db.postgres import AsyncSessionLocal
         from backend.models.signal import SecuritySignal
+        from backend.models.entities import EntityNode
+        from sqlalchemy import select, and_
+        from backend.pipeline.entity_normalizer import EntityNormalizer
         
         signal_id = str(uuid.uuid4())
         
+        # Resolve entity node IDs for enrichment
+        entity_node_ids = []
+        try:
+            async with AsyncSessionLocal() as enrich_session:
+                norm = EntityNormalizer()
+                candidates = []
+                if log.src_ip:
+                    can, _ = norm.normalize_ip(str(log.src_ip))
+                    if can:
+                        candidates.append(("ip", can))
+                if log.user_name:
+                    can, _ = norm.normalize_username(log.user_name)
+                    if can:
+                        candidates.append(("user", can))
+                if log.host_name:
+                    can, _ = norm.normalize_hostname(log.host_name)
+                    if can:
+                        candidates.append(("host", can))
+
+                for etype, cval in candidates:
+                    row = (await enrich_session.execute(
+                        select(EntityNode.id).where(
+                            and_(
+                                EntityNode.tenant_id == log.tenant_id,
+                                EntityNode.entity_type == etype,
+                                EntityNode.canonical_value == cval,
+                            )
+                        )
+                    )).scalar_one_or_none()
+                    if row:
+                        entity_node_ids.append(row)
+        except Exception as enrich_err:
+            logger.debug(f"Entity enrichment skipped: {enrich_err}")
+
         # 1. Save to Real Database (PostgreSQL)
         try:
             async with AsyncSessionLocal() as session:
                 new_signal = SecuritySignal(
                     id=signal_id,
-                    tenant_id=log.get("tenant_id", "default"),
+                    tenant_id=log.tenant_id,
                     title=match["title"],
                     description=match["description"],
                     severity=match["severity"],
                     status="new",
                     rule_name=match.get("rule_name", "unknown"),
-                    source_ip=log.get("source_ip") or log.get("src_ip", ""),
-                    hostname=log.get("hostname") or log.get("host_name", ""),
-                    username=log.get("username") or log.get("user_name", ""),
+                    source_ip=str(log.src_ip) if log.src_ip else "",
+                    hostname=log.host_name or "",
+                    username=log.user_name or "",
                     tags=match.get("tags", []),
-                    evidence_refs=[log.get("id", log.get("_id", "unknown"))],
+                    evidence_refs=[str(log.event_id)],
                     mitre_tactics=match.get("mitre_techniques", []),
                     source_alert_id=match.get("rule_name", "unknown")
                 )
                 session.add(new_signal)
                 await session.commit()
-                logger.info(f"[POSTGRES] Persisted Security Signal {signal_id}")
+                logger.info(f"[POSTGRES] Persisted Security Signal {signal_id} entity_refs={entity_node_ids}")
                 if _metrics_enabled:
                     SIGNALS_CREATED.labels(
-                        tenant_id=log.get("tenant_id", "default"),
+                        tenant_id=log.tenant_id,
                         severity=match["severity"],
                         rule=match.get("rule_name", "unknown")
                     ).inc()
@@ -124,16 +161,16 @@ class DetectionEngine:
             "description": match["description"],
             "severity": match["severity"],
             "rule_name": match["rule_name"],
-            "source_ip": log.get("source_ip") or log.get("src_ip", ""),
-            "hostname": log.get("hostname") or log.get("host_name", ""),
-            "username": log.get("username") or log.get("user_name", ""),
-            "log_id": log.get("id", ""),
+            "source_ip": str(log.src_ip) if log.src_ip else "",
+            "hostname": log.host_name or "",
+            "username": log.user_name or "",
+            "log_id": str(log.event_id),
             "mitre_techniques": match.get("mitre_techniques", []),
             "tags": match.get("tags", []),
             "acknowledged": False,
         }
         # Broadcast alert to specific tenant via WebSocket
-        tenant_id = log.get("tenant_id", "default")
+        tenant_id = log.tenant_id
         await self.ws_manager.send_alert(alert_payload, tenant_id)
         logger.info(f"[ALERT] [{alert_payload['severity'].upper()}] {alert_payload['title']}")
 
@@ -147,7 +184,7 @@ class DetectionEngine:
                 "description": match["description"],
                 "severity": match["severity"],
                 "rule_name": match.get("rule_name", "unknown"),
-                "source_ip": log.get("source_ip") or log.get("src_ip", ""),
+                "source_ip": str(log.src_ip) if log.src_ip else "",
                 "mitre_techniques": match.get("mitre_techniques", [])
             }
             asyncio.create_task(
@@ -156,7 +193,7 @@ class DetectionEngine:
                     evidence_events=[log],
                     actor_id="autonomous_agent",
                     actor_username="AetherGuard-AI",
-                    tenant_id=log.get("tenant_id", "default"),
+                    tenant_id=log.tenant_id,
                     ws_manager=self.ws_manager
                 )
             )

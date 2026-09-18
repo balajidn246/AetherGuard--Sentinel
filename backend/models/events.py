@@ -38,5 +38,8 @@ class OCSFBaseEvent(BaseModel):
     source_log: str = Field(default="api", description="Source identifier")
     tenant_id: str = Field(default="default", description="Automatically populated by middleware")
 
+    # Strict schema: any additional fields must go into raw_data or a dedicated unmapped_fields dict if needed,
+    # but the core contract must be immutable.
     class Config:
-        extra = "allow"
+        extra = "forbid"
+        frozen = True

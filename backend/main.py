@@ -117,8 +117,14 @@ async def lifespan(app: FastAPI):
     logger.info("  API Docs:  http://localhost:8000/docs")
     logger.info("=" * 60)
 
+    # Start Entity Worker
+    from backend.pipeline.entity_worker import EntityBatchWorker
+    app.state.entity_worker = EntityBatchWorker()
+    asyncio.create_task(app.state.entity_worker.run())
+
     yield
 
+    app.state.entity_worker.running = False
     logger.info("[SHUTDOWN] AetherGuard Sentinel shutting down...")
     log_generator.stop()
     if hasattr(app.state, "syslog_receiver"):
@@ -149,7 +155,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from api.routes import auth, dashboard, logs, alerts, incidents, threat_intel, users, reports, ingest, signals, cases, rules, audit
+from api.routes import auth, dashboard, logs, alerts, incidents, threat_intel, users, reports, ingest, signals, cases, rules, audit, entities, soar
 
 app.include_router(auth.router,         prefix="/api/auth",         tags=["Auth"])
 app.include_router(dashboard.router,    prefix="/api/dashboard",    tags=["Dashboard"])
@@ -164,6 +170,8 @@ app.include_router(users.router,        prefix="/api/users",        tags=["Users
 app.include_router(reports.router,      prefix="/api/reports",      tags=["Reports"])
 app.include_router(ingest.router,       prefix="/api/ingest",       tags=["Ingestion"])
 app.include_router(signals.router,      prefix="/api/signals",      tags=["Signals & AI"])
+app.include_router(entities.router,     prefix="/api/entities",     tags=["Entity Graph"])
+app.include_router(soar.router,         prefix="/api/soar",         tags=["SOAR"])
 
 
 

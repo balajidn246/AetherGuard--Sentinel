@@ -223,32 +223,75 @@ async def get_mitre_coverage(current_user: dict = Depends(get_current_user)):
 
 @router.get("/geo-attacks")
 async def get_geo_attacks(current_user: dict = Depends(get_current_user)):
-    """Return geo-tagged real attack telemetry from ClickHouse."""
+    """
+    Return geo-tagged attack telemetry from ClickHouse.
+    Country is resolved from well-known IP ranges stored in our entity attribute store.
+    For IPs without country metadata, "Unknown" is returned — no external geo-IP calls.
+    """
     tenant_id = current_user.get("tenant_id", "default")
     ch_client = get_clickhouse()
     attacks = []
 
-    if ch_client:
+    if not ch_client:
+        return attacks
+
+    try:
+        query = """
+        SELECT
+            src_ip,
+            lower(severity) AS severity,
+            class_name,
+            formatDateTime(time, '%Y-%m-%dT%H:%M:%SZ') AS event_time,
+            count() AS event_count
+        FROM events
+        WHERE tenant_id = {t:String}
+          AND src_ip != ''
+          AND src_ip != '0.0.0.0'
+          AND time >= now() - INTERVAL 24 HOUR
+        GROUP BY src_ip, severity, class_name, toStartOfMinute(time)
+        ORDER BY event_time DESC
+        LIMIT 200
+        """
+        result = ch_client.query(query, parameters={"t": tenant_id})
+
+        # Fetch any country metadata stored in entity attributes
+        ip_to_country: dict = {}
         try:
-            query = """
-            SELECT src_ip, severity, class_name, time
-            FROM events
-            WHERE tenant_id = {t:String} AND src_ip != ''
-            ORDER BY time DESC
-            LIMIT 100
-            """
-            result = ch_client.query(query, parameters={"t": tenant_id})
-            for row in result.result_rows:
-                attacks.append({
-                    "source_ip": row[0],
-                    "country": "Unknown",
-                    "severity": row[1],
-                    "event_type": row[2],
-                    "time": str(row[3])
-                })
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Dashboard query error: {e}")
+            from backend.db.postgres import AsyncSessionLocal
+            from backend.models.entities import EntityNode
+            from sqlalchemy import select, and_
+            ip_list = list({row[0] for row in result.result_rows})
+            if ip_list:
+                async with AsyncSessionLocal() as session:
+                    pg_rows = (await session.execute(
+                        select(EntityNode.canonical_value, EntityNode.attributes).where(
+                            and_(
+                                EntityNode.tenant_id == tenant_id,
+                                EntityNode.entity_type == "ip",
+                                EntityNode.canonical_value.in_(ip_list)
+                            )
+                        )
+                    )).all()
+                    for ip_val, attrs in pg_rows:
+                        if attrs and attrs.get("country"):
+                            ip_to_country[ip_val] = attrs["country"]
+        except Exception:
+            pass
+
+        for row in result.result_rows:
+            src_ip, severity, class_name, event_time, count = row
+            country = ip_to_country.get(src_ip, "Unknown")
+            attacks.append({
+                "source_ip": src_ip,
+                "country": country,
+                "severity": severity,
+                "event_type": class_name,
+                "time": event_time,
+                "event_count": count,
+            })
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Geo-attacks query error: {e}")
 
     return attacks
 

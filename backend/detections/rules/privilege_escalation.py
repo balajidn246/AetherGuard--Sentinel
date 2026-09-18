@@ -1,4 +1,5 @@
 """Privilege escalation detection - EventID 4728, 4672, 4720."""
+from backend.models.events import OCSFBaseEvent
 from detections.rules.base import BaseRule
 
 PRIV_EVENT_IDS = {4728, 4672, 4720, 4732, 4756}
@@ -11,23 +12,23 @@ PRIV_KEYWORDS = [
 class PrivilegeEscalationRule(BaseRule):
     name = "privilege_escalation"
 
-    async def evaluate(self, log: dict, windows: dict) -> dict | None:
-        event_id = log.get("event_id")
-        msg_lower = log.get("message", "").lower()
+    async def evaluate(self, log: OCSFBaseEvent, windows: dict) -> dict | None:
+        event_id = str(log.event_id)
+        msg_lower = (log.message or "").lower()
 
         triggered = (
             event_id in PRIV_EVENT_IDS
-            or log.get("event_type") == "privilege_escalation"
+            or (log.class_name.lower() if log.class_name else "") == "privilege_escalation"
             or any(k in msg_lower for k in PRIV_KEYWORDS)
         )
         if not triggered:
             return None
 
         return {
-            "title": f"Privilege Escalation on {log.get('hostname', 'unknown')}",
+            "title": f"Privilege Escalation on {getattr(log, 'hostname', None)}",
             "description": (
-                f"User {log.get('username', 'unknown')} performed a privilege escalation "
-                f"action (EventID {event_id}) on {log.get('hostname', 'unknown')}"
+                f"User {getattr(log, 'username', None)} performed a privilege escalation "
+                f"action (EventID {event_id}) on {getattr(log, 'hostname', None)}"
             ),
             "severity": "critical",
             "rule_name": self.name,

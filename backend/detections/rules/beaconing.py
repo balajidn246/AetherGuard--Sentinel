@@ -1,5 +1,6 @@
 """Beaconing detection - periodic outbound connections to same external IP."""
 import time
+from backend.models.events import OCSFBaseEvent
 from detections.rules.base import BaseRule
 
 BEACON_WINDOW = 300   # 5 minutes
@@ -9,13 +10,13 @@ BEACON_COUNT = 8      # min hits to declare beaconing
 class BeaconingRule(BaseRule):
     name = "beaconing"
 
-    async def evaluate(self, log: dict, windows: dict) -> dict | None:
-        if log.get("log_source") not in ("firewall", "netflow", "ids_ips"):
+    async def evaluate(self, log: OCSFBaseEvent, windows: dict) -> dict | None:
+        if log.source_log not in ("firewall", "netflow", "ids_ips"):
             return None
-        if log.get("action") not in ("ALLOW", None):
+        if (log.raw_data or log.class_name) not in ("ALLOW", None):
             return None
 
-        dest_ip = log.get("dest_ip") or log.get("source_ip", "")
+        dest_ip = log.dst_ip or getattr(log, 'source_ip', None)
         if not dest_ip:
             return None
 
@@ -23,7 +24,7 @@ class BeaconingRule(BaseRule):
         if dest_ip.startswith("192.168.") or dest_ip.startswith("10."):
             return None
 
-        src_host = log.get("hostname", "unknown")
+        src_host = (log.host_name or "unknown")
         key = f"beacon:{src_host}:{dest_ip}"
         now = time.time()
         ts_bucket = windows.setdefault(key, [])

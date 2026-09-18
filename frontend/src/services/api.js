@@ -136,5 +136,22 @@ export const healthApi = {
   check: () => api.get('/api/health'),
 }
 
+// ── Entity Graph ──────────────────────────────────────────────────────────────
+export const entityApi = {
+  nodes: (params) => api.get('/api/entities/nodes', { params }),
+  node: (id) => api.get(`/api/entities/nodes/${id}`),
+  nodeGraph: (id, depth = 1) => api.get(`/api/entities/nodes/${id}/graph`, { params: { depth } }),
+  relationships: (params) => api.get('/api/entities/relationships', { params }),
+  summary: () => api.get('/api/entities/summary'),
+  search: (q, limit = 20) => api.get('/api/entities/search', { params: { q, limit } }),
+}
+
+// ── SOAR ─────────────────────────────────────────────────────────────────────
+export const soarApi = {
+  execute: (data) => api.post('/api/soar/execute', data),
+  history: () => api.get('/api/soar/history'),
+}
+
 export default api
+
 

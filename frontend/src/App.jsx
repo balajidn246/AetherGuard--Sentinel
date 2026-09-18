@@ -20,6 +20,7 @@ import CasesPage from './pages/CasesPage'
 import DetectionRulesPage from './pages/DetectionRulesPage'
 import AuditPage from './pages/AuditPage'
 import SOARPage from './pages/SOARPage'
+import EntityGraphPage from './pages/EntityGraphPage'
 
 function Layout({ children, onOpenCommandPalette }) {
   useWebSocket()
@@ -86,6 +87,12 @@ function AppRoutes({ onOpenCommandPalette }) {
       } />
       <Route path="/settings" element={
         <ProtectedRoute><Layout onOpenCommandPalette={onOpenCommandPalette}><SettingsPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/attack-map" element={
+        <ProtectedRoute><Layout onOpenCommandPalette={onOpenCommandPalette}><AttackMapPage /></Layout></ProtectedRoute>
+      } />
+      <Route path="/entity-graph" element={
+        <ProtectedRoute><Layout onOpenCommandPalette={onOpenCommandPalette}><EntityGraphPage /></Layout></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

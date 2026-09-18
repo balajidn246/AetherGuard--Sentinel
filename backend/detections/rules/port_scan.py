@@ -1,5 +1,6 @@
 """Port scan detection - rapid SYN/DENY events from single source IP."""
 import time
+from backend.models.events import OCSFBaseEvent
 from detections.rules.base import BaseRule
 
 WINDOW_SECONDS = 60
@@ -9,14 +10,14 @@ PORT_THRESHOLD = 20
 class PortScanRule(BaseRule):
     name = "port_scan"
 
-    async def evaluate(self, log: dict, windows: dict) -> dict | None:
-        if log.get("log_source") != "firewall":
+    async def evaluate(self, log: OCSFBaseEvent, windows: dict) -> dict | None:
+        if log.source_log != "firewall":
             return None
-        if log.get("action") not in ("DENY", "DROP"):
+        if (log.raw_data or log.class_name) not in ("DENY", "DROP"):
             return None
 
-        src_ip = log.get("source_ip", "unknown")
-        dst_port = log.get("dest_port")
+        src_ip = (str(log.src_ip) if log.src_ip else "unknown")
+        dst_port = log.dst_port
         if not dst_port:
             return None
 
@@ -37,7 +38,7 @@ class PortScanRule(BaseRule):
                 "title": f"Port Scan Detected from {src_ip}",
                 "description": (
                     f"Source {src_ip} scanned {unique_ports} unique ports "
-                    f"on {log.get('dest_ip', 'unknown')} within {WINDOW_SECONDS}s"
+                    f"on {log.dst_ip} within {WINDOW_SECONDS}s"
                 ),
                 "severity": "medium",
                 "rule_name": self.name,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { threatIntelApi, casesApi, auditApi } from '../services/api'
+import { threatIntelApi, casesApi, auditApi, soarApi } from '../services/api'
 import useStore from '../store/useStore'
 import {
   Zap, ShieldAlert, Server, User, Globe, CheckCircle2,
@@ -97,53 +97,41 @@ export default function SOARPage() {
       toast.error('Analyst safety confirmation is mandatory')
       return
     }
+    if (!justification || justification.trim().length < 10) {
+      toast.error('Justification must be at least 10 characters')
+      return
+    }
 
     setExecuting(true)
     try {
-      // 1. If PB-101, add to real IOC blocklist
-      if (selectedPlaybook.id === 'PB-101' || selectedPlaybook.targetType === 'ip') {
-        try {
-          await threatIntelApi.createIoc({
-            ioc_type: 'ip',
-            value: targetEntity,
-            threat_type: 'quarantine',
-            confidence: 95,
-            notes: `SOAR Quarantine: ${justification || 'Analyst triggered'}`
-          })
-        } catch (e) {
-          console.warn('IOC registration warning:', e)
-        }
-      }
+      const res = await soarApi.execute({
+        playbook_id: selectedPlaybook.id,
+        target_entity: targetEntity.trim(),
+        target_type: selectedPlaybook.targetType,
+        justification: justification.trim(),
+        analyst_confirmed: true,
+        signal_id: initialSignal || null,
+      })
+      const result = res.data
 
-      // 2. If PB-104, create an investigation case
-      if (selectedPlaybook.id === 'PB-104') {
-        await casesApi.create({
-          title: `Forensic Snapshot: ${targetEntity}`,
-          description: `SOAR automated forensic bundle for ${targetEntity}. Justification: ${justification}`,
-          priority: 'high',
-          signal_ids: initialSignal ? [initialSignal] : [],
-          evidence_refs: [targetEntity]
-        })
-      }
-
-      // 3. Record to execution history
       const record = {
-        id: `EXEC-${Math.floor(1000 + Math.random() * 9000)}`,
-        playbookId: selectedPlaybook.id,
-        name: selectedPlaybook.name,
-        target: targetEntity,
-        actor: user?.username || 'analyst',
-        timestamp: new Date().toISOString(),
-        status: 'SUCCESS',
-        notes: justification || 'Analyst approval gate cleared'
+        id: result.execution_id,
+        playbookId: result.playbook_id,
+        name: result.playbook_name,
+        target: result.target_entity,
+        actor: result.actor,
+        timestamp: result.timestamp,
+        status: result.status,
+        notes: result.notes,
+        steps: result.steps || [],
       }
 
       setExecutionHistory(prev => [record, ...prev])
-      toast.success(`Playbook ${selectedPlaybook.id} executed successfully!`)
+      toast.success(`Playbook ${result.playbook_id} executed — ${result.status}`)
       setShowApprovalModal(false)
     } catch (err) {
-      console.error('SOAR Execution error:', err)
-      toast.error(`Execution failed: ${err.message}`)
+      const detail = err.response?.data?.detail || err.message
+      toast.error(`Execution failed: ${detail}`)
     } finally {
       setExecuting(false)
     }

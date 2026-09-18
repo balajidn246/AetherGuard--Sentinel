@@ -62,11 +62,21 @@ class YamlDetectionEngine:
                     logger.error(f"Failed to load rule {filename}", error=str(e))
         logger.info(f"Loaded {len(self.rules)} YAML detection rules")
         
-    def evaluate_event(self, event: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def evaluate_event(self, event: Any) -> List[Dict[str, Any]]:
         """Evaluate an event against all rules. Returns list of matches."""
+        if hasattr(event, "model_dump"):
+            event_dict = event.model_dump()
+            # Map common legacy fields for YAML rules
+            event_dict["event_type"] = event_dict.get("class_name", "").lower()
+            event_dict["source_ip"] = event_dict.get("src_ip", "")
+            event_dict["dest_ip"] = event_dict.get("dst_ip", "")
+            event_dict["dest_port"] = event_dict.get("dst_port", 0)
+        else:
+            event_dict = event
+            
         matches = []
         for rule in self.rules:
-            if rule.evaluate(event):
+            if rule.evaluate(event_dict):
                 matches.append({
                     "rule_id": rule.id,
                     "rule_name": rule.name,

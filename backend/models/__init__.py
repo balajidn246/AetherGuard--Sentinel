@@ -7,6 +7,7 @@ from backend.models.ueba_snapshot import UEBASnapshot
 from backend.models.audit_log import AuditLog
 from backend.models.case import Case
 from backend.models.detection_rule import DetectionRuleModel
+from backend.models.entities import EntityNode, EntityRelationship
 
 __all__ = [
     "Base",
@@ -17,5 +18,7 @@ __all__ = [
     "UEBASnapshot",
     "AuditLog",
     "Case",
-    "DetectionRuleModel"
+    "DetectionRuleModel",
+    "EntityNode",
+    "EntityRelationship"
 ]

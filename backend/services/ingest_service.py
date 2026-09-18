@@ -25,42 +25,29 @@ class IngestService:
             
         processed = []
         for event in events:
-            event.tenant_id = tenant_id
+            event = event.model_copy(update={"tenant_id": tenant_id})
             processed.append(event)
             
             # 2. Bridge to Legacy Detection Engine & WebSocket
             if app_state:
-                legacy_dict = {
-                    "id": str(event.event_id),
-                    "timestamp": event.time.isoformat(),
-                    "message": event.message or "",
-                    "raw_data": event.raw_data or "",
-                    "source_ip": str(event.src_ip) if event.src_ip else "",
-                    "dest_ip": str(event.dst_ip) if event.dst_ip else "",
-                    "source_port": event.src_port or 0,
-                    "dest_port": event.dst_port or 0,
-                    "event_type": event.class_name.lower() if event.class_name != "Unknown" else "log",
-                    "class_name": event.class_name,
-                    "category_name": event.category_name,
-                    "severity": event.severity.lower(),
-                    "username": event.user_name or "",
-                    "hostname": event.host_name or "",
-                    "process_name": event.process_name or "",
-                    "source_log": event.source_log or "",
-                    "bytes_out": 0,
-                }
                 
                 if hasattr(app_state, "detection_engine"):
-                    # The detection engine evaluates asynchronously
-                    asyncio.create_task(app_state.detection_engine.evaluate(legacy_dict))
+                    # DetectionEngine is migrated to OCSFBaseEvent
+                    asyncio.create_task(app_state.detection_engine.evaluate(event))
 
                 if hasattr(app_state, "ueba_engine"):
-                    # Track user activity in UEBA baseline
-                    app_state.ueba_engine.record_event(legacy_dict, tenant_id)
+                    # UEBA is migrated to OCSFBaseEvent
+                    app_state.ueba_engine.record_event(event, tenant_id)
                     
                 if hasattr(app_state, "ws_manager"):
-                    # Broadcast to specific tenant
-                    asyncio.create_task(app_state.ws_manager.send_log(legacy_dict, tenant_id))
+                    # WebSocket broadcast
+                    asyncio.create_task(app_state.ws_manager.send_log(event.model_dump(), tenant_id))
+
+            # Entity Extraction
+            from backend.pipeline.entity_extractor import EntityExtractor
+            from backend.pipeline.entity_queue import entity_queue
+            extracted_entities, extracted_rels = EntityExtractor.extract(event)
+            asyncio.create_task(entity_queue.push_candidates(extracted_entities, extracted_rels))
 
         
         # 3. Attempt to send to ClickHouse
